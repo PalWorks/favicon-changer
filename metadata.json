@@ -1,0 +1,5 @@
+{
+  "name": "Favicon Changer",
+  "description": "A Chrome Extension to customize website favicons using emojis, uploads, or AI-generated icons via Gemini.",
+  "requestFramePermissions": []
+}

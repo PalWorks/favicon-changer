@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Favicon Changer",
+  "version": "1.1.0",
+  "description": "Customize favicons for any website with AI, Emojis, or Uploads.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Favicon Changer"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "https://picsum.photos/16/16",
+    "48": "https://picsum.photos/48/48",
+    "128": "https://picsum.photos/128/128"
+  }
+}
