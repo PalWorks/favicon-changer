@@ -15,139 +15,178 @@ interface GlobalSettings {
 }
 
 interface StorageData {
-    rules: Record<string, FaviconRule>;
-    settings: GlobalSettings;
+  rules: Record<string, FaviconRule>;
+  settings: GlobalSettings;
 }
 
-// Function to find and replace/update the favicon
-const updateFavicon = (url: string) => {
-  // Find all existing favicon links
-  const existingLinks = document.querySelectorAll("link[rel*='icon']");
-  
-  // Remove existing ones to avoid conflicts
-  existingLinks.forEach(link => link.parentNode?.removeChild(link));
+// Change Mark Attribute to prevent observer loops
+const CHANGE_MARK = 'data-fc-modified';
 
-  // Create new link
-  const link = document.createElement('link');
-  link.type = 'image/x-icon';
-  link.rel = 'shortcut icon';
-  link.href = url;
-  document.getElementsByTagName('head')[0].appendChild(link);
-};
+// Function to find and replace/update the favicon
+function updateFavicon(url: string) {
+  const head = document.getElementsByTagName('head')[0];
+  if (!head) return;
+
+  // 1. Find all existing favicon links
+  const existingLinks = document.querySelectorAll("link[rel*='icon']");
+
+  // 2. Remove them all to avoid conflicts
+  existingLinks.forEach(link => {
+    // Check if it's already our correct link
+    if (link.getAttribute('href') === url && link.getAttribute('rel') === 'icon') {
+      // Ensure it's marked as ours
+      if (!link.hasAttribute(CHANGE_MARK)) {
+        link.setAttribute(CHANGE_MARK, 'true');
+      }
+    } else {
+      link.remove();
+    }
+  });
+
+  // 3. Ensure our link exists
+  // Use Array.from to avoid selector injection attacks with special characters in URL
+  const currentLink = Array.from(document.querySelectorAll("link[rel*='icon']"))
+    .find(link => link.getAttribute('href') === url);
+
+  if (!currentLink) {
+    const link = document.createElement('link');
+    link.type = 'image/png';
+    link.rel = 'icon';
+    link.href = url;
+    link.setAttribute(CHANGE_MARK, 'true');
+    head.appendChild(link);
+  }
+}
 
 // --- MATCHING ENGINE ---
-const findBestRule = (currentUrl: string, currentDomain: string, rules: Record<string, FaviconRule>): FaviconRule | null => {
-    const ruleList = Object.values(rules);
-    
-    // 1. Exact URL Match (Highest Priority)
-    const exactMatch = ruleList.find(r => r.matchType === 'exact_url' && r.matcher === currentUrl);
-    if (exactMatch) return exactMatch;
+function findBestRule(currentUrl: string, currentDomain: string, rules: Record<string, FaviconRule>): FaviconRule | null {
+  const ruleList = Object.values(rules);
 
-    // 2. Regex Match (Medium Priority)
-    // We filter for regex types, then test them.
-    // If multiple regex match, we pick the first one found (UI should ideally allow reordering, but simply finding one is usually enough)
-    const regexMatch = ruleList.find(r => {
-        if (r.matchType !== 'regex') return false;
-        try {
-            const regex = new RegExp(r.matcher);
-            return regex.test(currentUrl);
-        } catch (e) {
-            console.warn('[Favicon Flow] Invalid Regex:', r.matcher);
-            return false;
+  // 1. Exact URL Match (Highest Priority)
+  const exactMatch = ruleList.find(r => r.matchType === 'exact_url' && r.matcher === currentUrl);
+  if (exactMatch) return exactMatch;
+
+  // 2. Regex Match (Medium Priority)
+  const regexMatch = ruleList.find(r => {
+    if (r.matchType !== 'regex') return false;
+    try {
+      const regex = new RegExp(r.matcher);
+      return regex.test(currentUrl);
+    } catch (e) {
+      console.warn('[Favicon Flow] Invalid Regex:', r.matcher);
+      return false;
+    }
+  });
+  if (regexMatch) return regexMatch;
+
+  // 3. Domain Match (Lowest Priority)
+  const domainMatch = ruleList.find(r => {
+    if (r.matchType !== 'domain') return false;
+    return currentDomain === r.matcher || currentDomain.endsWith('.' + r.matcher);
+  });
+
+  return domainMatch || null;
+}
+
+let observer: MutationObserver | null = null;
+let intervalId: any = null;
+
+function setupObserver(targetUrl: string) {
+  if (observer) observer.disconnect();
+  if (intervalId) clearInterval(intervalId);
+
+  const head = document.querySelector('head');
+  if (!head) return;
+
+  // A. Mutation Observer for long-term changes
+  observer = new MutationObserver((mutations) => {
+    let shouldUpdate = false;
+    for (const mutation of mutations) {
+      // Ignore changes to elements we marked
+      if (mutation.target instanceof Element && mutation.target.hasAttribute(CHANGE_MARK)) {
+        continue;
+      }
+
+      if (mutation.type === 'childList') {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeName === 'LINK') {
+            const link = node as HTMLLinkElement;
+            // If a new icon is added and it's NOT ours, we need to update
+            if (link.rel.includes('icon') && !link.hasAttribute(CHANGE_MARK)) {
+              shouldUpdate = true;
+            }
+          }
+        });
+      } else if (mutation.type === 'attributes') {
+        const link = mutation.target as HTMLLinkElement;
+        // If an icon attribute changed and it's NOT ours, update
+        if (link.nodeName === 'LINK' && link.rel.includes('icon') && !link.hasAttribute(CHANGE_MARK)) {
+          shouldUpdate = true;
         }
-    });
-    if (regexMatch) return regexMatch;
+      }
+    }
 
-    // 3. Domain Match (Lowest Priority)
-    // We match if the hostname ends with the matcher (e.g. 'mail.google.com' matches 'google.com' rule)
-    // OR strict equality.
-    const domainMatch = ruleList.find(r => {
-        if (r.matchType !== 'domain') return false;
-        return currentDomain === r.matcher || currentDomain.endsWith('.' + r.matcher);
-    });
-    
-    return domainMatch || null;
-};
+    if (shouldUpdate) {
+      console.log('[Favicon Flow] Detected external change, re-applying...');
+      updateFavicon(targetUrl);
+    }
+  });
+
+  observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href', 'rel'] });
+
+  // B. Interval Check (Backup for SPAs/Hydration)
+  intervalId = setInterval(() => {
+    // Safer check avoiding selector injection
+    const currentLink = Array.from(document.querySelectorAll("link[rel*='icon']"))
+      .find(link => link.getAttribute('href') === targetUrl);
+
+    if (!currentLink) {
+      console.log('[Favicon Flow] Interval check failed, re-applying...');
+      updateFavicon(targetUrl);
+    }
+  }, 2000); // Check every 2 seconds
+}
 
 // Initial Load Logic
-const applyRule = async () => {
+function applyRule() {
   const currentUrl = window.location.href;
   const currentDomain = window.location.hostname;
-  
+
   chrome.storage.local.get(['rules', 'settings'], (result: StorageData) => {
     const rules = result.rules || {};
     const settings = result.settings || {};
-    
+
     const rule = findBestRule(currentUrl, currentDomain, rules);
+    console.log('[Favicon Flow] Checking rules for:', currentUrl, 'Found:', rule);
 
     if (rule) {
       console.log(`[Favicon Flow] Applied rule: ${rule.matchType} match for ${rule.matcher}`);
       updateFavicon(rule.faviconUrl);
       setupObserver(rule.faviconUrl);
     } else if (settings.defaultFaviconUrl) {
-       // Apply global fallback if no specific rule exists
-       // But only if the site doesn't have one? Or always?
-       // Requirement says: "Choose your own default favicon to use if none exists"
-       // Checking if "none exists" is hard because browsers hide it. 
-       // We will assume if this setting is ON, we want to enforce it for non-matched sites.
-       console.log(`[Favicon Flow] Applied Global Default`);
-       updateFavicon(settings.defaultFaviconUrl);
-       setupObserver(settings.defaultFaviconUrl);
+      console.log(`[Favicon Flow] Applied Global Default`);
+      updateFavicon(settings.defaultFaviconUrl);
+      setupObserver(settings.defaultFaviconUrl);
     }
   });
-};
-
-let observer: MutationObserver | null = null;
-
-const setupObserver = (targetUrl: string) => {
-  if (observer) observer.disconnect();
-
-  const head = document.querySelector('head');
-  if (!head) return;
-
-  observer = new MutationObserver((mutations) => {
-    let shouldUpdate = false;
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeName === 'LINK') {
-            const link = node as HTMLLinkElement;
-            if ((link.rel.includes('icon')) && link.href !== targetUrl) {
-              shouldUpdate = true;
-            }
-          }
-        });
-      } else if (mutation.type === 'attributes') {
-         const link = mutation.target as HTMLLinkElement;
-         if (link.nodeName === 'LINK' && link.rel.includes('icon') && link.href !== targetUrl) {
-           shouldUpdate = true;
-         }
-      }
-    }
-
-    if (shouldUpdate) {
-       observer?.disconnect();
-       updateFavicon(targetUrl);
-       if(observer) observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
-    }
-  });
-
-  observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
-};
+}
 
 // Listen for messages from Popup/Options
-chrome.runtime.onMessage.addListener((message: any) => {
+chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
+  console.log('[Favicon Flow] Message received:', message);
   if (message.type === 'RulesUpdated') {
-      applyRule();
+    console.log('[Favicon Flow] RulesUpdated received, re-applying rules...');
+    applyRule();
   } else if (message.type === 'RESET_ICON') {
-      if(observer) observer.disconnect();
-      window.location.reload(); 
+    if (observer) observer.disconnect();
+    window.location.reload();
   }
 });
 
 // Run on start
+console.log('[Favicon Changer] Content Script Loaded');
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', applyRule);
+  document.addEventListener('DOMContentLoaded', applyRule);
 } else {
-    applyRule();
+  applyRule();
 }

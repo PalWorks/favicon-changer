@@ -1,18 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 
-const getClient = () => {
-  // NOTE: In a real extension, you might ask the user for a key or use a proxy.
-  // We use process.env.API_KEY as strictly requested by the guidelines.
-  const apiKey = process.env.API_KEY; 
+const getClient = (providedKey?: string) => {
+  const apiKey = providedKey || process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found. Please configure your environment.");
+    throw new Error("API Key not found. Please configure in extension settings or environment.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
-export const generateIcon = async (prompt: string): Promise<string> => {
-  const ai = getClient();
-  
+export const generateIcon = async (prompt: string, apiKey?: string): Promise<string> => {
+  const ai = getClient(apiKey);
+
   // Using gemini-2.5-flash-image for speed and image capabilities
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
@@ -24,21 +22,21 @@ export const generateIcon = async (prompt: string): Promise<string> => {
       ],
     },
     config: {
-        // Image generation doesn't use standard responseMimeType
+      // Image generation doesn't use standard responseMimeType
     }
   });
 
   // Extract image
   let base64Image = '';
-  
+
   // Iterate to find the inline data
   if (response.candidates && response.candidates[0].content.parts) {
-      for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-              base64Image = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-              break;
-          }
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        base64Image = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        break;
       }
+    }
   }
 
   if (!base64Image) {

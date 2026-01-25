@@ -1,17 +1,19 @@
 export type MatchType = 'domain' | 'exact_url' | 'regex';
+export type Shape = 'circle' | 'square' | 'banner' | 'border';
 
 export interface FaviconRule {
   id: string;          // Unique ID (UUID)
   matcher: string;     // The domain, url, or regex string
   matchType: MatchType;
   faviconUrl: string;
-  sourceType: 'emoji' | 'upload' | 'ai' | 'url';
+  sourceType: 'emoji' | 'upload' | 'ai' | 'url' | 'custom';
   createdAt: number;
 }
 
 export interface GlobalSettings {
   defaultFaviconUrl?: string; // Fallback if no site favicon exists
   enableFileAccessWarning: boolean;
+  geminiApiKey?: string;
 }
 
 export interface StorageData {
@@ -40,4 +42,11 @@ export interface EmojiCategory {
   name: string;
   icon: string;
   emojis: EmojiItem[];
+}
+
+export interface TabInfo {
+  id?: number;
+  url: string;
+  domain: string;
+  favIconUrl: string;
 }
