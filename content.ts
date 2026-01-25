@@ -2,22 +2,9 @@
 
 declare const chrome: any;
 
-interface FaviconRule {
-  id: string;
-  matcher: string;
-  matchType: 'domain' | 'exact_url' | 'regex';
-  faviconUrl: string;
-  sourceType: string;
-}
-
-interface GlobalSettings {
-  defaultFaviconUrl?: string;
-}
-
-interface StorageData {
-  rules: Record<string, FaviconRule>;
-  settings: GlobalSettings;
-}
+import { FaviconRule, GlobalSettings, StorageData } from './types';
+import { logger } from './utils/logger';
+import { findBestRule } from './utils/matcher';
 
 // Change Mark Attribute to prevent observer loops
 const CHANGE_MARK = 'data-fc-modified';
@@ -55,38 +42,12 @@ function updateFavicon(url: string) {
     link.href = url;
     link.setAttribute(CHANGE_MARK, 'true');
     head.appendChild(link);
+    logger.debug('[Content] Appended new favicon link');
   }
 }
 
 // --- MATCHING ENGINE ---
-function findBestRule(currentUrl: string, currentDomain: string, rules: Record<string, FaviconRule>): FaviconRule | null {
-  const ruleList = Object.values(rules);
-
-  // 1. Exact URL Match (Highest Priority)
-  const exactMatch = ruleList.find(r => r.matchType === 'exact_url' && r.matcher === currentUrl);
-  if (exactMatch) return exactMatch;
-
-  // 2. Regex Match (Medium Priority)
-  const regexMatch = ruleList.find(r => {
-    if (r.matchType !== 'regex') return false;
-    try {
-      const regex = new RegExp(r.matcher);
-      return regex.test(currentUrl);
-    } catch (e) {
-      console.warn('[Favicon Flow] Invalid Regex:', r.matcher);
-      return false;
-    }
-  });
-  if (regexMatch) return regexMatch;
-
-  // 3. Domain Match (Lowest Priority)
-  const domainMatch = ruleList.find(r => {
-    if (r.matchType !== 'domain') return false;
-    return currentDomain === r.matcher || currentDomain.endsWith('.' + r.matcher);
-  });
-
-  return domainMatch || null;
-}
+// (Logic moved to utils/matcher.ts)
 
 let observer: MutationObserver | null = null;
 let intervalId: any = null;
@@ -127,7 +88,7 @@ function setupObserver(targetUrl: string) {
     }
 
     if (shouldUpdate) {
-      console.log('[Favicon Flow] Detected external change, re-applying...');
+      logger.debug('[Content] Detected external change, re-applying...');
       updateFavicon(targetUrl);
     }
   });
@@ -141,7 +102,7 @@ function setupObserver(targetUrl: string) {
       .find(link => link.getAttribute('href') === targetUrl);
 
     if (!currentLink) {
-      console.log('[Favicon Flow] Interval check failed, re-applying...');
+      logger.debug('[Content] Interval check failed, re-applying...');
       updateFavicon(targetUrl);
     }
   }, 2000); // Check every 2 seconds
@@ -157,7 +118,7 @@ function captureOriginalFavicon() {
     const link = links[i];
     if (!link.hasAttribute(CHANGE_MARK)) {
       originalFaviconUrl = link.getAttribute('href');
-      console.log('[Favicon Flow] Captured original favicon:', originalFaviconUrl);
+      logger.debug('[Content] Captured original favicon:', originalFaviconUrl);
       return;
     }
   }
@@ -165,14 +126,14 @@ function captureOriginalFavicon() {
 
 function restoreOriginalFavicon() {
   if (originalFaviconUrl) {
-    console.log('[Favicon Flow] Restoring original favicon:', originalFaviconUrl);
+    logger.info('[Content] Restoring original favicon:', originalFaviconUrl);
     updateFavicon(originalFaviconUrl);
   } else {
     // If no original was found, maybe just remove our custom ones?
     // For now, let's try to remove our marked links
     const markedLinks = document.querySelectorAll(`link[${CHANGE_MARK}='true']`);
     markedLinks.forEach(link => link.remove());
-    console.log('[Favicon Flow] No original favicon to restore, removed custom links.');
+    logger.info('[Content] No original favicon to restore, removed custom links.');
   }
 }
 
@@ -185,22 +146,22 @@ function applyRule() {
 
   chrome.storage.local.get(['rules', 'settings'], (result: StorageData) => {
     const rules = result.rules || {};
-    const settings = result.settings || {};
+    const settings = (result.settings || {}) as GlobalSettings;
 
-    const rule = findBestRule(currentUrl, currentDomain, rules);
-    console.log('[Favicon Flow] Checking rules for:', currentUrl, 'Found:', rule);
+    const rule = findBestRule(currentUrl, currentDomain, Object.values(rules));
+    logger.debug('[Content] Checking rules for:', { currentUrl, ruleFound: !!rule });
 
     if (rule) {
-      console.log(`[Favicon Flow] Applied rule: ${rule.matchType} match for ${rule.matcher}`);
+      logger.info(`[Content] Applied rule: ${rule.matchType} match for ${rule.matcher}`);
       updateFavicon(rule.faviconUrl);
       setupObserver(rule.faviconUrl);
     } else if (settings.defaultFaviconUrl) {
-      console.log(`[Favicon Flow] Applied Global Default`);
+      logger.info(`[Content] Applied Global Default`);
       updateFavicon(settings.defaultFaviconUrl);
       setupObserver(settings.defaultFaviconUrl);
     } else {
       // No rule matches -> Restore original
-      console.log('[Favicon Flow] No rule matched. Restoring original.');
+      logger.debug('[Content] No rule matched. Restoring original.');
       restoreOriginalFavicon();
       // We might want to disconnect the observer if we are back to normal
       if (observer) {
@@ -217,9 +178,9 @@ function applyRule() {
 
 // Listen for messages from Popup/Options
 chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
-  console.log('[Favicon Flow] Message received:', message);
+  logger.debug('[Content] Message received:', message);
   if (message.type === 'RulesUpdated') {
-    console.log('[Favicon Flow] RulesUpdated received, re-applying rules...');
+    logger.info('[Content] RulesUpdated received, re-applying rules...');
     applyRule();
   } else if (message.type === 'RESET_ICON') {
     if (observer) observer.disconnect();
@@ -228,7 +189,7 @@ chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
 });
 
 // Run on start
-console.log('[Favicon Changer] Content Script Loaded');
+logger.info('[Content] Content Script Loaded');
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', applyRule);
 } else {

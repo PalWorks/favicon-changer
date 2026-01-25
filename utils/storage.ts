@@ -142,14 +142,19 @@ export const importRulesFromJson = async (jsonString: string): Promise<{ success
   }
 };
 
-import { sendMessageToTab } from './messaging';
+import { sendMessageToTab, isRestrictedUrl } from './messaging';
 
 export const notifyTabs = () => {
   if (!IS_DEV) {
     chrome.tabs.query({}, (tabs: any[]) => {
       tabs.forEach(tab => {
         if (tab.id) {
-          sendMessageToTab(tab.id, { type: 'RulesUpdated' });
+          if (!isRestrictedUrl(tab.url)) {
+            // console.log(`Notifying tab ${tab.id} (${tab.url})`);
+            sendMessageToTab(tab.id, { type: 'RulesUpdated' });
+          } else {
+             // console.log(`Skipping restricted tab ${tab.id} (${tab.url})`);
+          }
         }
       });
     });
@@ -177,7 +182,10 @@ export const getCurrentTabInfo = async (): Promise<TabInfo> => {
           let favIconUrl = tabs[0].favIconUrl || '';
 
           // Fallback: If no favicon in metadata, try to scrape it
-          if (!favIconUrl && tabs[0].id) {
+          // But skip restricted URLs to avoid errors
+          const isRestricted = isRestrictedUrl(tabs[0].url);
+
+          if (!favIconUrl && tabs[0].id && !isRestricted) {
             try {
               const results = await chrome.scripting.executeScript({
                 target: { tabId: tabs[0].id },

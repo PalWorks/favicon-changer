@@ -24,7 +24,6 @@ export default defineConfig(({ mode }) => {
         input: {
           popup: path.resolve(__dirname, 'index.html'),
           options: path.resolve(__dirname, 'options.html'),
-          content: path.resolve(__dirname, 'content.ts'),
         },
         output: {
           entryFileNames: (chunkInfo) => {

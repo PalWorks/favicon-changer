@@ -1,68 +1,116 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Accordion } from '../Accordion';
 import { Button } from '../Button';
 import { drawOverlay, drawBadge, BadgePosition } from '../../utils/canvas';
-import { logger } from '../../utils/logger';
+import { FaviconRule } from '../../types';
 
 interface BadgeSectionProps {
     isOpen: boolean;
     onToggle: () => void;
     sourceIconUrl: string;
-    onSave: (url: string, type: 'custom') => void;
+    initialValues?: FaviconRule['metadata'];
+    onSave: (url: string, type: 'custom', metadata: FaviconRule['metadata']) => void;
+    isLoading?: boolean;
 }
 
-export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, sourceIconUrl, onSave }) => {
+export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, sourceIconUrl, initialValues, onSave, isLoading }) => {
     const [mode, setMode] = useState<'overlay' | 'badge'>('overlay');
 
     // Overlay State
-    const [overlayColor, setOverlayColor] = useState('#3b82f6'); // Blue default
+    const [overlayColor, setOverlayColor] = useState('#3b82f6');
     const [overlayOpacity, setOverlayOpacity] = useState(0.5);
 
     // Badge State
     const [badgeText, setBadgeText] = useState('1');
-    const [badgeBgColor, setBadgeBgColor] = useState('#ef4444'); // Red default
+    const [badgeBgColor, setBadgeBgColor] = useState('#ef4444');
     const [badgeTextColor, setBadgeTextColor] = useState('#ffffff');
     const [badgePosition, setBadgePosition] = useState<BadgePosition>('bottom');
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+    // Initialize from metadata
+    useEffect(() => {
+        if (initialValues) {
+            if (initialValues.mode) setMode(initialValues.mode);
+            if (initialValues.overlayColor) setOverlayColor(initialValues.overlayColor);
+            if (initialValues.overlayOpacity !== undefined) setOverlayOpacity(initialValues.overlayOpacity);
+            if (initialValues.badgeText) setBadgeText(initialValues.badgeText);
+            if (initialValues.badgeBgColor) setBadgeBgColor(initialValues.badgeBgColor);
+            if (initialValues.badgeTextColor) setBadgeTextColor(initialValues.badgeTextColor);
+            if (initialValues.badgePosition) setBadgePosition(initialValues.badgePosition);
+        }
+    }, [initialValues]);
+
     // Generate Preview
     useEffect(() => {
         if (!isOpen || !sourceIconUrl) return;
 
+        let objectUrl: string | null = null;
+
         const generate = async () => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.src = sourceIconUrl;
+            try {
+                // Use fetch to bypass CORS issues with canvas
+                const response = await fetch(sourceIconUrl);
+                const blob = await response.blob();
+                objectUrl = URL.createObjectURL(blob);
 
-            await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+                const img = new Image();
+                // No crossOrigin needed for local blob URL
+                img.src = objectUrl;
 
-            const canvas = document.createElement('canvas');
-            const SIZE = 128;
-            canvas.width = SIZE;
-            canvas.height = SIZE;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
+                await new Promise((resolve, reject) => { 
+                    img.onload = resolve; 
+                    img.onerror = reject; 
+                });
 
-            // Draw Base
-            ctx.clearRect(0, 0, SIZE, SIZE);
-            ctx.drawImage(img, 0, 0, SIZE, SIZE);
+                const canvas = document.createElement('canvas');
+                const SIZE = 128;
+                canvas.width = SIZE;
+                canvas.height = SIZE;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
 
-            if (mode === 'overlay') {
-                drawOverlay(ctx, SIZE, SIZE, overlayColor, overlayOpacity);
-            } else {
-                drawBadge(ctx, SIZE, SIZE, badgeText, badgeBgColor, badgeTextColor, badgePosition);
+                // Draw Base
+                ctx.clearRect(0, 0, SIZE, SIZE);
+                ctx.drawImage(img, 0, 0, SIZE, SIZE);
+
+                if (mode === 'overlay') {
+                    drawOverlay(ctx, SIZE, SIZE, overlayColor, overlayOpacity);
+                } else {
+                    drawBadge(ctx, SIZE, SIZE, badgeText, badgeBgColor, badgeTextColor, badgePosition);
+                }
+
+                setPreviewUrl(canvas.toDataURL('image/png'));
+            } catch (error) {
+                console.error('Failed to generate preview:', error);
+            } finally {
+                if (objectUrl) {
+                    URL.revokeObjectURL(objectUrl);
+                }
             }
-
-            setPreviewUrl(canvas.toDataURL('image/png'));
         };
 
         generate();
+        
+        return () => {
+             if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
     }, [isOpen, sourceIconUrl, mode, overlayColor, overlayOpacity, badgeText, badgeBgColor, badgeTextColor, badgePosition]);
 
     const handleApply = () => {
         if (previewUrl) {
-            onSave(previewUrl, 'custom');
+            const metadata: FaviconRule['metadata'] = {
+                mode,
+                overlayColor,
+                overlayOpacity,
+                badgeText,
+                badgeBgColor,
+                badgeTextColor,
+                badgePosition
+            };
+            onSave(previewUrl, 'custom', metadata);
         }
     };
 
@@ -173,7 +221,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                     </div>
                 )}
 
-                <Button onClick={handleApply} className="w-full">Apply to Favicon</Button>
+                <Button onClick={handleApply} isLoading={isLoading} className="w-full">Apply to Favicon</Button>
             </div>
         </Accordion>
     );

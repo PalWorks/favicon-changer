@@ -2,23 +2,32 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../Button';
 import { Accordion } from '../Accordion';
 import { logger } from '../../utils/logger';
+import { FaviconRule } from '../../types';
 
 type ImageMode = 'contain' | 'cover' | 'stretch';
 
 interface UploadSectionProps {
     isOpen: boolean;
     onToggle: () => void;
-    onSave: (url: string, type: 'upload' | 'url') => void;
+    initialValues?: FaviconRule['metadata'];
+    onSave: (url: string, type: 'upload' | 'url', metadata: FaviconRule['metadata']) => void;
     onError: (msg: string) => void;
     onSuccess: (msg: string) => void;
+    isLoading?: boolean;
 }
 
-export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, onSave, onError, onSuccess }) => {
+export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, initialValues, onSave, onError, onSuccess, isLoading }) => {
     const [pendingImage, setPendingImage] = useState<string | null>(null);
     const [imageMode, setImageMode] = useState<ImageMode>('contain');
     const [processedPreview, setProcessedPreview] = useState<string | null>(null);
     const [customUrl, setCustomUrl] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (initialValues?.imageMode) {
+            setImageMode(initialValues.imageMode);
+        }
+    }, [initialValues]);
 
     // Process image whenever mode or source changes
     useEffect(() => {
@@ -120,14 +129,14 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
 
     const handleApply = () => {
         if (processedPreview) {
-            onSave(processedPreview, 'upload');
+            onSave(processedPreview, 'upload', { imageMode });
             setPendingImage(null);
         }
     };
 
     const handleUrlApply = () => {
         if (customUrl) {
-            onSave(customUrl, 'url');
+            onSave(customUrl, 'url', {});
             setCustomUrl('');
         }
     };
@@ -155,7 +164,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                         </div>
                         <div className="flex gap-2">
                             <Button variant="ghost" size="sm" onClick={() => setPendingImage(null)} className="flex-1">Cancel</Button>
-                            <Button size="sm" onClick={handleApply} className="flex-1">Apply Icon</Button>
+                            <Button size="sm" onClick={handleApply} isLoading={isLoading} className="flex-1">Apply Icon</Button>
                         </div>
                     </div>
                 ) : (

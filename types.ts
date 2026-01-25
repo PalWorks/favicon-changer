@@ -8,6 +8,22 @@ export interface FaviconRule {
   faviconUrl: string;
   originalUrl?: string; // The source image URL before any edits (for smart layering)
   sourceType: 'emoji' | 'upload' | 'ai' | 'url' | 'custom';
+  metadata?: {
+    // Badge/Overlay
+    mode?: 'overlay' | 'badge';
+    overlayColor?: string;
+    overlayOpacity?: number;
+    badgeText?: string;
+    badgeBgColor?: string;
+    badgeTextColor?: string;
+    badgePosition?: 'top' | 'bottom';
+
+    // Emoji
+    emojiChar?: string;
+
+    // Upload
+    imageMode?: 'contain' | 'cover' | 'stretch';
+  };
   createdAt: number;
 }
 

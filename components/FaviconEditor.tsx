@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson } from '../utils/storage';
 import { logger } from '../utils/logger';
+import { findConflictingRule } from '../utils/matcher';
+
 import { FaviconRule, TabInfo } from '../types';
 import { Button } from './Button';
 import { FaviconPreview } from './FaviconPreview';
@@ -19,6 +21,8 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
     const [rules, setRules] = useState<FaviconRule[]>([]);
     const [openSection, setOpenSection] = useState<'upload' | 'emoji' | 'badge' | null>(null);
 
+    const [isSaving, setIsSaving] = useState(false);
+
     // Inputs
     const [manualUrl, setManualUrl] = useState('');
     const [applyScope, setApplyScope] = useState<'domain' | 'exact_url'>('exact_url');
@@ -27,15 +31,25 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
     const importInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        logger.log(`FaviconEditor Mounted - Mode: ${mode}`);
+        logger.info(`FaviconEditor Mounted - Mode: ${mode}`);
         refreshData();
     }, [mode]);
 
     // When initialRule changes (in Options mode), load it
     useEffect(() => {
         if (mode === 'options' && initialRule) {
+            logger.debug('Loading initial rule', initialRule);
             setManualUrl(initialRule.matcher);
             setApplyScope(initialRule.matchType === 'regex' ? 'exact_url' : initialRule.matchType);
+
+            // Auto-expand section based on sourceType or metadata
+            if (initialRule.sourceType === 'emoji') {
+                setOpenSection('emoji');
+            } else if (initialRule.sourceType === 'custom') {
+                setOpenSection('badge');
+            } else if (initialRule.sourceType === 'upload' || initialRule.sourceType === 'url') {
+                setOpenSection('upload');
+            }
 
             try {
                 const urlObj = new URL(initialRule.matcher.startsWith('http') ? initialRule.matcher : `https://${initialRule.matcher}`);
@@ -52,56 +66,95 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                 });
             }
         } else if (mode === 'options' && !initialRule) {
-            setManualUrl('');
-            setCurrentTab({ url: '', domain: '', favIconUrl: '' });
+            // When user types a URL, try to fetch its favicon
+            if (manualUrl) {
+                try {
+                    const urlObj = new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`);
+                    const domain = urlObj.hostname;
+                    // Use Google's favicon service as a reliable fallback for the options page
+                    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                    
+                    setCurrentTab({
+                        url: manualUrl,
+                        domain: domain,
+                        favIconUrl: googleFaviconUrl
+                    });
+                } catch (e) {
+                    // Invalid URL, just reset
+                    setCurrentTab({ url: manualUrl, domain: '', favIconUrl: '' });
+                }
+            } else {
+                setCurrentTab({ url: '', domain: '', favIconUrl: '' });
+            }
+            // setOpenSection(null); // Don't close section while typing
         }
-    }, [initialRule, mode]);
+    }, [initialRule, mode, manualUrl]);
 
     const refreshData = async () => {
-        if (mode === 'popup') {
-            const info = await getCurrentTabInfo();
-            setCurrentTab(info);
+        try {
+            if (mode === 'popup') {
+                const info = await getCurrentTabInfo();
+                logger.debug('Popup: Retrieved tab info', info);
+                setCurrentTab(info);
+            }
+            const data = await getStorageData();
+            logger.debug('Storage data loaded', { ruleCount: Object.keys(data.rules).length });
+            setRules(Object.values(data.rules));
+            const allowed = await isAllowedFileSchemeAccess();
+            setFileAccess(allowed);
+        } catch (err) {
+            logger.error('Failed to refresh data', err);
         }
-        const data = await getStorageData();
-        setRules(Object.values(data.rules));
-        const allowed = await isAllowedFileSchemeAccess();
-        setFileAccess(allowed);
     };
 
-    const handleSave = async (url: string, sourceType: FaviconRule['sourceType']) => {
-        const targetUrl = mode === 'popup' ? currentTab.url : manualUrl;
-        const targetDomain = mode === 'popup' ? currentTab.domain : (manualUrl ? new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`).hostname : '');
+    const handleSave = async (url: string, sourceType: FaviconRule['sourceType'], metadata?: FaviconRule['metadata']) => {
+        setIsSaving(true);
+        logger.info('Attempting to save rule', { sourceType, metadata });
 
-        if (!targetUrl) {
-            setStatusMessage({ type: 'error', text: 'No target URL specified.' });
-            return;
+        try {
+            const targetUrl = mode === 'popup' ? currentTab.url : manualUrl;
+            const targetDomain = mode === 'popup' ? currentTab.domain : (manualUrl ? new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`).hostname : '');
+
+            if (!targetUrl) {
+                logger.warn('Save failed: No target URL specified');
+                setStatusMessage({ type: 'error', text: 'No target URL specified.' });
+                return;
+            }
+
+            const matcher = applyScope === 'domain' ? targetDomain : targetUrl;
+            const existingRule = rules.find(r => r.matcher === matcher && r.matchType === applyScope);
+
+            const newRule: FaviconRule = {
+                id: existingRule?.id || generateId(),
+                matcher,
+                matchType: applyScope,
+                faviconUrl: url,
+                originalUrl: existingRule?.originalUrl || (sourceType === 'custom' ? currentTab.favIconUrl : undefined),
+                sourceType,
+                metadata, // Store the metadata
+                createdAt: Date.now()
+            };
+
+            logger.info('Saving rule', newRule);
+            await saveRule(newRule);
+            await refreshData();
+            if (onRuleSaved) onRuleSaved();
+
+            setStatusMessage({ type: 'success', text: 'Favicon updated successfully!' });
+
+            setTimeout(() => {
+                setStatusMessage(null);
+            }, 2000);
+        } catch (error) {
+            logger.error('Failed to save rule', error);
+            setStatusMessage({ type: 'error', text: 'Failed to save rule.' });
+        } finally {
+            setIsSaving(false);
         }
-
-        const matcher = applyScope === 'domain' ? targetDomain : targetUrl;
-        const existingRule = rules.find(r => r.matcher === matcher && r.matchType === applyScope);
-
-        const newRule: FaviconRule = {
-            id: existingRule?.id || generateId(),
-            matcher,
-            matchType: applyScope,
-            faviconUrl: url,
-            originalUrl: existingRule?.originalUrl || (sourceType === 'custom' ? currentTab.favIconUrl : undefined),
-            sourceType,
-            createdAt: Date.now()
-        };
-
-        await saveRule(newRule);
-        refreshData();
-        if (onRuleSaved) onRuleSaved();
-
-        setStatusMessage({ type: 'success', text: 'Favicon updated successfully!' });
-
-        setTimeout(() => {
-            setStatusMessage(null);
-        }, 2000);
     };
 
     const handleDelete = async (id: string) => {
+        logger.info('Deleting rule', { id });
         await deleteRule(id);
         refreshData();
         if (onRuleSaved) onRuleSaved();
@@ -121,6 +174,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (e) {
+            logger.error('Failed to download original favicon', e);
             window.open(currentTab.favIconUrl, '_blank');
         }
     };
@@ -131,13 +185,20 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
         const reader = new FileReader();
         reader.onload = async (ev) => {
             const content = ev.target?.result as string;
-            const result = await importRulesFromJson(content);
-            if (result.success) {
-                alert(`Successfully imported ${result.count} rules!`);
-                refreshData();
-                if (onRuleSaved) onRuleSaved();
-            } else {
-                alert('Failed to import rules. Invalid file format.');
+            try {
+                const result = await importRulesFromJson(content);
+                if (result.success) {
+                    logger.info('Rules imported successfully', result);
+                    alert(`Successfully imported ${result.count} rules!`);
+                    refreshData();
+                    if (onRuleSaved) onRuleSaved();
+                } else {
+                    logger.warn('Import failed: Invalid format');
+                    alert('Failed to import rules. Invalid file format.');
+                }
+            } catch (err) {
+                logger.error('Import crashed', err);
+                alert('Failed to import rules.');
             }
         };
         reader.readAsText(file);
@@ -155,8 +216,37 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
 
     const hasValidTarget = mode === 'popup' ? !!currentTab.url : !!manualUrl;
 
+
+    const [conflictRule, setConflictRule] = useState<FaviconRule | null>(null);
+
+    // Check for conflicts/shadowing
+    useEffect(() => {
+        if (mode !== 'popup' || !currentTab.url) {
+            setConflictRule(null);
+            return;
+        }
+
+        const conflict = findConflictingRule(currentTab.url, applyScope, rules);
+        setConflictRule(conflict);
+    }, [applyScope, currentTab.url, rules, mode]);
+
+    const switchToConflictRule = () => {
+        if (conflictRule) {
+            setApplyScope(conflictRule.matchType === 'regex' ? 'exact_url' : conflictRule.matchType as any);
+            // The useEffect for initialRule/activeRule logic might need to handle this?
+            // Actually, just switching scope might be enough if we rely on the editor to pick up the existing rule for that scope.
+            // But we might need to force a reload of that rule's data.
+            // Let's just switch scope and let the user see the data.
+            // Better: Load that rule explicitly.
+            setManualUrl(conflictRule.matcher);
+            // setApplyScope is already done above, but we need to ensure the editor state reflects the rule.
+            // We can reuse the logic that loads a rule.
+            // But for now, just switching scope is a good start, the user will see "Active" status.
+        }
+    };
+
     return (
-        <div className="w-full h-full bg-slate-50 flex flex-col">
+        <div className="w-full h-full bg-slate-50 flex flex-col relative">
             {/* Header - Only show in Popup mode */}
             {mode === 'popup' && (
                 <header className="bg-white border-b border-slate-200 p-4 sticky top-0 z-10 flex items-center justify-between">
@@ -196,13 +286,31 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                 </header>
             )}
 
-            <main className="flex-1 p-4 overflow-y-auto">
+            <main className="flex-1 p-4 overflow-y-auto relative">
                 <div className="space-y-5">
-                    {/* Status Message */}
+                    {/* Status Message - Sticky */}
                     {statusMessage && (
-                        <div className={`p-3 rounded-lg text-xs font-medium flex items-center gap-2 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                        <div className={`sticky top-0 z-20 p-3 rounded-lg text-xs font-medium flex items-center gap-2 shadow-md mb-2 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                             <span>{statusMessage.type === 'success' ? '✅' : '⚠️'}</span>
                             {statusMessage.text}
+                        </div>
+                    )}
+
+                    {/* Conflict Warning */}
+                    {conflictRule && (
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2 flex flex-col gap-2">
+                            <div className="flex items-start gap-2">
+                                <span className="text-lg">⚠️</span>
+                                <div>
+                                    <p className="text-xs font-bold text-orange-800">Rule Conflict Detected</p>
+                                    <p className="text-[10px] text-orange-700 leading-tight mt-1">
+                                        You are editing a <strong>Domain</strong> rule, but an <strong>{conflictRule.matchType === 'exact_url' ? 'Exact URL' : 'Regex'}</strong> rule is currently active for this page. Your changes will be saved, but the other rule will take precedence.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button size="sm" variant="secondary" onClick={switchToConflictRule} className="w-full text-[10px] h-7 bg-white border-orange-200 text-orange-700 hover:bg-orange-100">
+                                Switch to Overriding Rule
+                            </Button>
                         </div>
                     )}
 
@@ -297,7 +405,9 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                         <UploadSection
                             isOpen={openSection === 'upload'}
                             onToggle={() => toggleSection('upload')}
+                            initialValues={initialRule?.metadata}
                             onSave={handleSave}
+                            isLoading={isSaving}
                             onError={(msg) => setStatusMessage({ type: 'error', text: msg })}
                             onSuccess={(msg) => msg ? setStatusMessage({ type: 'success', text: msg }) : setStatusMessage(null)}
                         />
@@ -305,6 +415,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                         <EmojiSection
                             isOpen={openSection === 'emoji'}
                             onToggle={() => toggleSection('emoji')}
+                            initialValues={initialRule?.metadata}
                             onSave={handleSave}
                         />
 
@@ -312,7 +423,9 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                             isOpen={openSection === 'badge'}
                             onToggle={() => toggleSection('badge')}
                             sourceIconUrl={activeRule?.originalUrl || currentTab.favIconUrl}
+                            initialValues={initialRule?.metadata}
                             onSave={handleSave}
+                            isLoading={isSaving}
                         />
                     </div>
                 </div>

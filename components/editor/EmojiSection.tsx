@@ -1,19 +1,26 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Accordion } from '../Accordion';
 import { EMOJI_LIBRARY } from '../../constants';
-import { EmojiItem } from '../../types';
+import { EmojiItem, FaviconRule } from '../../types';
 
 interface EmojiSectionProps {
     isOpen: boolean;
     onToggle: () => void;
-    onSave: (url: string, type: 'emoji') => void;
+    initialValues?: FaviconRule['metadata'];
+    onSave: (url: string, type: 'emoji', metadata: FaviconRule['metadata']) => void;
 }
 
-export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, onSave }) => {
+export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, initialValues, onSave }) => {
     const [emojiSearch, setEmojiSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>(EMOJI_LIBRARY[0].id);
     const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
     const emojiContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (initialValues?.emojiChar) {
+            setSelectedEmoji(initialValues.emojiChar);
+        }
+    }, [initialValues]);
 
     const saveEmoji = (emoji: string) => {
         setSelectedEmoji(emoji);
@@ -27,7 +34,7 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, on
             ctx.textBaseline = 'middle';
             ctx.fillText(emoji, 32, 34);
             const dataUrl = canvas.toDataURL('image/png');
-            onSave(dataUrl, 'emoji');
+            onSave(dataUrl, 'emoji', { emojiChar: emoji });
         }
     };
 

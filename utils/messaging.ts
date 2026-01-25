@@ -1,6 +1,27 @@
 import { TabInfo } from '../types';
 
 /**
+ * Checks if a URL is restricted (chrome://, about:, edge://, view-source:, chrome web store).
+ */
+export const isRestrictedUrl = (url?: string): boolean => {
+    if (!url) return true; // Treat missing URL as restricted for safety
+    try {
+        const urlObj = new URL(url);
+        const protocol = urlObj.protocol;
+        const hostname = urlObj.hostname;
+
+        return protocol === 'chrome:' ||
+            protocol === 'chrome-extension:' ||
+            protocol === 'edge:' ||
+            protocol === 'about:' ||
+            protocol === 'view-source:' ||
+            (protocol === 'https:' && (hostname === 'chrome.google.com' || hostname === 'chromewebstore.google.com'));
+    } catch (e) {
+        return true; // Invalid URL is restricted
+    }
+};
+
+/**
  * Ensures the content script is ready by pinging it.
  * If the ping fails, it injects the content script.
  */
@@ -19,6 +40,13 @@ export const ensureContentScriptReady = async (tabId: number, retries = 3): Prom
 
         // If ping fails, inject the content script
         try {
+            // Double check we are not trying to inject into a restricted tab
+            const tab = await chrome.tabs.get(tabId);
+            if (isRestrictedUrl(tab.url)) {
+                console.warn(`Skipping injection for restricted URL: ${tab.url}`);
+                return false;
+            }
+
             await chrome.scripting.executeScript({
                 target: { tabId },
                 files: ['content.js']
