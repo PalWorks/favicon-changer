@@ -72,14 +72,27 @@ const OptionsApp: React.FC = () => {
                     {/* Left Column: Editor */}
                     <div className="space-y-6">
                         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-[800px] flex flex-col">
-                            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                                <h2 className="font-bold text-slate-700 flex items-center gap-2">
-                                    <span className="text-xl">✏️</span>
-                                    {editingRule ? 'Edit Rule' : 'Create / Configure Rule'}
-                                </h2>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    {editingRule ? `Editing rule for ${editingRule.matcher}` : 'Enter a URL below to create a new rule.'}
-                                </p>
+                            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+                                <div>
+                                    <h2 className="font-bold text-slate-700 flex items-center gap-2">
+                                        <span className="text-xl">✏️</span>
+                                        {editingRule ? 'Edit Rule' : 'Create / Configure Rule'}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-1 line-clamp-1 break-all">
+                                        {editingRule ? `Editing rule for ${editingRule.matcher}` : 'Enter a URL below to create a new rule.'}
+                                    </p>
+                                </div>
+                                {editingRule && (
+                                    <button
+                                        onClick={() => setEditingRule(null)}
+                                        className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-all flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        New Rule
+                                    </button>
+                                )}
                             </div>
                             <div className="flex-1 overflow-hidden relative">
                                 <FaviconEditor

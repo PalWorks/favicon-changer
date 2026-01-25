@@ -144,6 +144,11 @@ function applyRule() {
   const currentUrl = window.location.href;
   const currentDomain = window.location.hostname;
 
+  if (!chrome.storage || !chrome.storage.local) {
+    logger.warn('[Content] chrome.storage.local is not available. Skipping rule application.');
+    return;
+  }
+
   chrome.storage.local.get(['rules', 'settings'], (result: StorageData) => {
     const rules = result.rules || {};
     const settings = (result.settings || {}) as GlobalSettings;

@@ -36,8 +36,11 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
     }, [mode]);
 
     // When initialRule changes (in Options mode), load it
+    // 1. Handle Rule Selection / Deselection (Reset)
     useEffect(() => {
-        if (mode === 'options' && initialRule) {
+        if (mode !== 'options') return;
+
+        if (initialRule) {
             logger.debug('Loading initial rule', initialRule);
             setManualUrl(initialRule.matcher);
             setApplyScope(initialRule.matchType === 'regex' ? 'exact_url' : initialRule.matchType);
@@ -65,30 +68,40 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                     favIconUrl: initialRule.faviconUrl
                 });
             }
-        } else if (mode === 'options' && !initialRule) {
-            // When user types a URL, try to fetch its favicon
-            if (manualUrl) {
-                try {
-                    const urlObj = new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`);
-                    const domain = urlObj.hostname;
-                    // Use Google's favicon service as a reliable fallback for the options page
-                    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-                    
-                    setCurrentTab({
-                        url: manualUrl,
-                        domain: domain,
-                        favIconUrl: googleFaviconUrl
-                    });
-                } catch (e) {
-                    // Invalid URL, just reset
-                    setCurrentTab({ url: manualUrl, domain: '', favIconUrl: '' });
-                }
-            } else {
-                setCurrentTab({ url: '', domain: '', favIconUrl: '' });
-            }
-            // setOpenSection(null); // Don't close section while typing
+        } else {
+            // Reset to "New Rule" state
+            logger.debug('Resetting editor for new rule');
+            setManualUrl('');
+            setApplyScope('exact_url');
+            setOpenSection(null);
+            setCurrentTab({ url: '', domain: '', favIconUrl: '' });
         }
-    }, [initialRule, mode, manualUrl]);
+    }, [initialRule, mode]);
+
+    // 2. Handle Manual URL Typing (Live Preview)
+    useEffect(() => {
+        if (mode !== 'options' || initialRule) return; // Only for new rule creation
+
+        if (manualUrl) {
+            try {
+                const urlObj = new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`);
+                const domain = urlObj.hostname;
+                // Use Google's favicon service as a reliable fallback for the options page
+                const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+                
+                setCurrentTab({
+                    url: manualUrl,
+                    domain: domain,
+                    favIconUrl: googleFaviconUrl
+                });
+            } catch (e) {
+                // Invalid URL, just reset
+                setCurrentTab({ url: manualUrl, domain: '', favIconUrl: '' });
+            }
+        } else {
+            setCurrentTab({ url: '', domain: '', favIconUrl: '' });
+        }
+    }, [manualUrl, mode, initialRule]);
 
     const refreshData = async () => {
         try {

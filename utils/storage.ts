@@ -21,6 +21,11 @@ export const getStorageData = async (): Promise<StorageData> => {
   }
 
   return new Promise((resolve) => {
+    if (!chrome.storage || !chrome.storage.local) {
+      console.warn('chrome.storage.local is not available. Using default settings.');
+      resolve({ rules: {}, settings: DEFAULT_SETTINGS });
+      return;
+    }
     chrome.storage.local.get(['rules', 'settings'], (result: any) => {
       let rules = result.rules || {};
       const settings = { ...DEFAULT_SETTINGS, ...(result.settings || {}) };
