@@ -6,6 +6,7 @@ export interface FaviconRule {
   matcher: string;     // The domain, url, or regex string
   matchType: MatchType;
   faviconUrl: string;
+  originalUrl?: string; // The source image URL before any edits (for smart layering)
   sourceType: 'emoji' | 'upload' | 'ai' | 'url' | 'custom';
   createdAt: number;
 }
@@ -13,7 +14,6 @@ export interface FaviconRule {
 export interface GlobalSettings {
   defaultFaviconUrl?: string; // Fallback if no site favicon exists
   enableFileAccessWarning: boolean;
-  geminiApiKey?: string;
 }
 
 export interface StorageData {

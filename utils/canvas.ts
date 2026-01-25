@@ -7,6 +7,76 @@ interface GenerateFaviconOptions {
     text: string;
 }
 
+export type BadgePosition = 'top' | 'bottom';
+
+export const drawOverlay = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    color: string,
+    opacity: number
+) => {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+};
+
+export const drawBadge = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    text: string,
+    bgColor: string,
+    textColor: string,
+    position: BadgePosition
+) => {
+    ctx.save();
+    // Compact font size
+    const fontSize = Math.floor(height * 0.35); // 35% of icon size
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const paddingX = fontSize * 0.6;
+    const paddingY = fontSize * 0.3;
+    const textMetrics = ctx.measureText(text);
+    const textWidth = textMetrics.width;
+    const textHeight = fontSize; // Approximation
+
+    // Calculate badge dimensions (Compact Rectangle)
+    const badgeWidth = textWidth + paddingX * 2;
+    const badgeHeight = textHeight + paddingY * 2;
+    const borderRadius = 4; // Slight rounding
+
+    // Calculate position
+    let x = 0;
+    let y = 0;
+    const margin = height * 0.05; // 5% margin from edge
+
+    if (position === 'top') {
+        x = width / 2;
+        y = margin + badgeHeight / 2;
+    } else {
+        // Bottom
+        x = width / 2;
+        y = height - margin - badgeHeight / 2;
+    }
+
+    // Draw Badge Background (Rounded Rect)
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(x - badgeWidth / 2, y - badgeHeight / 2, badgeWidth, badgeHeight, borderRadius);
+    ctx.fill();
+
+    // Draw Text
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, x, y + (fontSize * 0.05)); // Slight vertical adjustment
+    ctx.restore();
+};
+
 export const generateFavicon = async (options: GenerateFaviconOptions): Promise<string> => {
     const { sourceUrl, color, shape, text } = options;
 
@@ -29,55 +99,6 @@ export const generateFavicon = async (options: GenerateFaviconOptions): Promise<
 
                 // Draw original favicon
                 ctx.drawImage(img, 0, 0, SIZE, SIZE);
-
-                // Apply tag overlay based on shape
-                ctx.fillStyle = color;
-
-                switch (shape) {
-                    case 'circle':
-                        // Bottom right corner circle
-                        ctx.beginPath();
-                        ctx.arc(SIZE - 20, SIZE - 20, 18, 0, Math.PI * 2);
-                        ctx.fill();
-                        break;
-
-                    case 'square':
-                        // Bottom right corner square
-                        ctx.fillRect(SIZE - 36, SIZE - 36, 32, 32);
-                        break;
-
-                    case 'banner':
-                        // Top banner
-                        ctx.fillRect(0, 0, SIZE, 24);
-                        break;
-
-                    case 'border':
-                        // Border around entire icon
-                        ctx.lineWidth = 6;
-                        ctx.strokeStyle = color;
-                        ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
-                        break;
-                }
-
-                // Add text if provided
-                if (text && text.length > 0) {
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 16px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-
-                    let textX = SIZE / 2;
-                    let textY = SIZE / 2;
-
-                    if (shape === 'circle' || shape === 'square') {
-                        textX = SIZE - 20;
-                        textY = SIZE - 20;
-                    } else if (shape === 'banner') {
-                        textY = 12;
-                    }
-
-                    ctx.fillText(text.charAt(0).toUpperCase(), textX, textY);
-                }
 
                 const dataUrl = canvas.toDataURL('image/png');
                 resolve(dataUrl);

@@ -147,8 +147,39 @@ function setupObserver(targetUrl: string) {
   }, 2000); // Check every 2 seconds
 }
 
+let originalFaviconUrl: string | null = null;
+
+function captureOriginalFavicon() {
+  if (originalFaviconUrl) return; // Already captured
+
+  const links = document.querySelectorAll("link[rel*='icon']");
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    if (!link.hasAttribute(CHANGE_MARK)) {
+      originalFaviconUrl = link.getAttribute('href');
+      console.log('[Favicon Flow] Captured original favicon:', originalFaviconUrl);
+      return;
+    }
+  }
+}
+
+function restoreOriginalFavicon() {
+  if (originalFaviconUrl) {
+    console.log('[Favicon Flow] Restoring original favicon:', originalFaviconUrl);
+    updateFavicon(originalFaviconUrl);
+  } else {
+    // If no original was found, maybe just remove our custom ones?
+    // For now, let's try to remove our marked links
+    const markedLinks = document.querySelectorAll(`link[${CHANGE_MARK}='true']`);
+    markedLinks.forEach(link => link.remove());
+    console.log('[Favicon Flow] No original favicon to restore, removed custom links.');
+  }
+}
+
 // Initial Load Logic
 function applyRule() {
+  captureOriginalFavicon();
+
   const currentUrl = window.location.href;
   const currentDomain = window.location.hostname;
 
@@ -167,6 +198,19 @@ function applyRule() {
       console.log(`[Favicon Flow] Applied Global Default`);
       updateFavicon(settings.defaultFaviconUrl);
       setupObserver(settings.defaultFaviconUrl);
+    } else {
+      // No rule matches -> Restore original
+      console.log('[Favicon Flow] No rule matched. Restoring original.');
+      restoreOriginalFavicon();
+      // We might want to disconnect the observer if we are back to normal
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
     }
   });
 }
