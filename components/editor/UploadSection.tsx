@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+
+import { isValidFileType, isValidFileSize, isValidUrl } from '../../utils/validation';
+import { compressFaviconDataUrl } from '../../utils/canvas';
 import { Button } from '../Button';
 import { Accordion } from '../Accordion';
 import { logger } from '../../utils/logger';
@@ -100,11 +103,20 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
     }, [pendingImage, imageMode]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        onSuccess('File selected. Processing...');
         const file = e.target.files?.[0];
-        if (!file) {
+        if (!file) return;
+
+        if (!isValidFileType(file)) {
+            onError('Invalid file type. Please upload PNG, JPEG, SVG, or WebP.');
             return;
         }
+
+        if (!isValidFileSize(file)) {
+            onError('File too large. Max size is 5MB.');
+            return;
+        }
+
+        onSuccess('File selected. Processing...');
 
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -127,15 +139,26 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
         e.target.value = '';
     };
 
-    const handleApply = () => {
+    const handleApply = async () => {
         if (processedPreview) {
-            onSave(processedPreview, 'upload', { imageMode });
-            setPendingImage(null);
+            try {
+                // Compress before saving to ensure we don't hit storage limits
+                const compressed = await compressFaviconDataUrl(processedPreview);
+                onSave(compressed, 'upload', { imageMode });
+                setPendingImage(null);
+            } catch (e) {
+                logger.error('Compression failed:', e);
+                onError('Failed to compress image.');
+            }
         }
     };
 
     const handleUrlApply = () => {
         if (customUrl) {
+            if (!isValidUrl(customUrl)) {
+                onError('Invalid URL format.');
+                return;
+            }
             onSave(customUrl, 'url', {});
             setCustomUrl('');
         }

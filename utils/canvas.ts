@@ -100,6 +100,19 @@ export const generateFavicon = async (options: GenerateFaviconOptions): Promise<
                 // Draw original favicon
                 ctx.drawImage(img, 0, 0, SIZE, SIZE);
 
+                // Draw Badge if text is present
+                if (text) {
+                    drawBadge(
+                        ctx,
+                        SIZE,
+                        SIZE,
+                        text,
+                        color || '#FF0000', // Default red if no color provided
+                        '#FFFFFF',          // White text
+                        'bottom'            // Default position
+                    );
+                }
+
                 const dataUrl = canvas.toDataURL('image/png');
                 resolve(dataUrl);
 
@@ -113,5 +126,67 @@ export const generateFavicon = async (options: GenerateFaviconOptions): Promise<
         };
 
         img.src = sourceUrl;
+    });
+};
+
+export const compressFaviconDataUrl = async (dataUrl: string, maxSizeKB = 50): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Max dimensions for favicon (128x128 is plenty for extension storage)
+            const MAX_SIZE = 128;
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+                if (width > height) {
+                    height = Math.round((height * MAX_SIZE) / width);
+                    width = MAX_SIZE;
+                } else {
+                    width = Math.round((width * MAX_SIZE) / height);
+                    height = MAX_SIZE;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Failed to get canvas context'));
+                return;
+            }
+
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Start with high quality
+            let quality = 0.9;
+            let compressedUrl = canvas.toDataURL('image/png', quality);
+
+            // If still too big, try JPEG (though PNG is better for transparency)
+            // For favicons, we really want PNG. If it's too big, we might just have to accept it 
+            // or resize further. 50KB is actually quite a lot for 128x128.
+            // A 128x128 PNG is usually ~20-30KB max.
+            
+            // Simple check: string length * 0.75 ~= bytes
+            while (compressedUrl.length * 0.75 > maxSizeKB * 1024 && quality > 0.1) {
+                quality -= 0.1;
+                // PNG doesn't support quality param in toDataURL, so this loop is mostly for if we switch to jpeg
+                // or if browser supports webp. Let's stick to resizing if needed.
+                // Actually, let's just enforce the size limit by resizing if needed.
+                
+                width = Math.floor(width * 0.9);
+                height = Math.floor(height * 0.9);
+                canvas.width = width;
+                canvas.height = height;
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+                compressedUrl = canvas.toDataURL('image/png');
+            }
+
+            resolve(compressedUrl);
+        };
+        img.onerror = (e) => reject(new Error('Failed to load image for compression'));
+        img.src = dataUrl;
     });
 };

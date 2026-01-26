@@ -1,5 +1,6 @@
 import { FaviconRule, GlobalSettings, StorageData } from '../types';
 import { IS_DEV } from '../constants';
+import { logger } from './logger';
 
 declare const chrome: any;
 
@@ -22,43 +23,50 @@ export const getStorageData = async (): Promise<StorageData> => {
 
   return new Promise((resolve) => {
     if (!chrome.storage || !chrome.storage.local) {
-      console.warn('chrome.storage.local is not available. Using default settings.');
+      logger.warn('chrome.storage.local is not available. Using default settings.');
       resolve({ rules: {}, settings: DEFAULT_SETTINGS });
       return;
     }
-    chrome.storage.local.get(['rules', 'settings'], (result: any) => {
+    chrome.storage.local.get(['rules', 'settings', 'migrated'], (result: any) => {
       let rules = result.rules || {};
       const settings = { ...DEFAULT_SETTINGS, ...(result.settings || {}) };
+      const alreadyMigrated = result.migrated === true;
 
       // --- MIGRATION LOGIC (Old Domain-Key format to New ID-Key format) ---
-      let hasMigrated = false;
-      const migratedRules: Record<string, FaviconRule> = {};
+      if (!alreadyMigrated) {
+          let hasMigrated = false;
+          const migratedRules: Record<string, FaviconRule> = {};
 
-      // Check if rules look like the old format (where key == domain in the object)
-      // Old: { "google.com": { domain: "google.com", ... } }
-      // New: { "uuid-123": { id: "uuid-123", matcher: "google.com", matchType: "domain", ... } }
+          // Check if rules look like the old format (where key == domain in the object)
+          // Old: { "google.com": { domain: "google.com", ... } }
+          // New: { "uuid-123": { id: "uuid-123", matcher: "google.com", matchType: "domain", ... } }
 
-      Object.entries(rules).forEach(([key, val]: [string, any]) => {
-        if (!val.id || !val.matcher) {
-          // This is an old rule
-          hasMigrated = true;
-          const newId = generateId();
-          migratedRules[newId] = {
-            id: newId,
-            matcher: val.domain || key,
-            matchType: 'domain', // Default old rules to domain match
-            faviconUrl: val.faviconUrl,
-            sourceType: val.type || 'upload',
-            createdAt: val.createdAt || Date.now()
-          };
-        } else {
-          migratedRules[key] = val;
-        }
-      });
+          Object.entries(rules).forEach(([key, val]: [string, any]) => {
+            if (!val.id || !val.matcher) {
+              // This is an old rule
+              hasMigrated = true;
+              const newId = generateId();
+              migratedRules[newId] = {
+                id: newId,
+                matcher: val.domain || key,
+                matchType: 'domain', // Default old rules to domain match
+                faviconUrl: val.faviconUrl,
+                sourceType: val.type || 'upload',
+                createdAt: val.createdAt || Date.now()
+              };
+            } else {
+              migratedRules[key] = val;
+            }
+          });
 
-      if (hasMigrated) {
-        chrome.storage.local.set({ rules: migratedRules });
-        rules = migratedRules;
+          if (hasMigrated) {
+            chrome.storage.local.set({ rules: migratedRules, migrated: true });
+            rules = migratedRules;
+            logger.info('Migration completed successfully.');
+          } else {
+            // If no migration needed, just mark as migrated to skip next time
+            chrome.storage.local.set({ migrated: true });
+          }
       }
       // -------------------------------------------------------------------
 
@@ -142,7 +150,7 @@ export const importRulesFromJson = async (jsonString: string): Promise<{ success
 
     return { success: true, count: validCount };
   } catch (e) {
-    console.error("Import failed", e);
+    logger.error("Import failed", e);
     return { success: false, count: 0 };
   }
 };
@@ -155,10 +163,10 @@ export const notifyTabs = () => {
       tabs.forEach(tab => {
         if (tab.id) {
           if (!isRestrictedUrl(tab.url)) {
-            // console.log(`Notifying tab ${tab.id} (${tab.url})`);
+            // logger.debug(`Notifying tab ${tab.id} (${tab.url})`);
             sendMessageToTab(tab.id, { type: 'RulesUpdated' });
           } else {
-             // console.log(`Skipping restricted tab ${tab.id} (${tab.url})`);
+             // logger.debug(`Skipping restricted tab ${tab.id} (${tab.url})`);
           }
         }
       });
@@ -203,7 +211,7 @@ export const getCurrentTabInfo = async (): Promise<TabInfo> => {
                 favIconUrl = results[0].result;
               }
             } catch (err) {
-              console.warn('Failed to scrape favicon:', err);
+              logger.warn('Failed to scrape favicon:', err);
             }
           }
 
@@ -230,7 +238,7 @@ export const openOptionsPage = () => {
     window.open(chrome.runtime.getURL('options.html'));
   } else {
     // Fallback for dev environment or if APIs are missing
-    console.log("Opening Options Page (Simulated)");
+    logger.info("Opening Options Page (Simulated)");
     window.open('/options.html', '_blank');
   }
 };

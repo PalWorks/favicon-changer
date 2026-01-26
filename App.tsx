@@ -2,11 +2,15 @@ import React from 'react';
 import { FaviconEditor } from './components/FaviconEditor';
 import './index.css';
 
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
+
 const App: React.FC = () => {
     return (
-        <div className="w-[400px] h-[600px] overflow-hidden">
-            <FaviconEditor mode="popup" />
-        </div>
+        <ErrorBoundary>
+            <div className="w-[400px] h-[600px] overflow-hidden">
+                <FaviconEditor mode="popup" />
+            </div>
+        </ErrorBoundary>
     );
 };
 

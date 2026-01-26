@@ -11,8 +11,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      // Removed unused Gemini API keys
     },
     resolve: {
       alias: {
@@ -24,11 +23,15 @@ export default defineConfig(({ mode }) => {
         input: {
           popup: path.resolve(__dirname, 'index.html'),
           options: path.resolve(__dirname, 'options.html'),
+          background: path.resolve(__dirname, 'background.ts'),
         },
         output: {
           entryFileNames: (chunkInfo) => {
             if (chunkInfo.name === 'content') {
               return 'content.js';
+            }
+            if (chunkInfo.name === 'background') {
+              return 'background.js';
             }
             return '[name].js';
           },
@@ -37,6 +40,7 @@ export default defineConfig(({ mode }) => {
       },
       outDir: 'dist',
       emptyOutDir: true,
+      copyPublicDir: true, // Explicitly ensure public dir is copied
     }
   };
 });

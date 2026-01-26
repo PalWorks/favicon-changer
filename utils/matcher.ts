@@ -1,4 +1,6 @@
-import { FaviconRule } from '../types';
+import { isValidRegex } from './validation';
+
+// ... (existing imports)
 
 export const findBestRule = (currentUrl: string, currentDomain: string, rules: FaviconRule[]): FaviconRule | null => {
     // 1. Exact URL Match (Highest Priority)
@@ -8,11 +10,14 @@ export const findBestRule = (currentUrl: string, currentDomain: string, rules: F
     // 2. Regex Match (Medium Priority)
     const regexMatch = rules.find(r => {
         if (r.matchType !== 'regex') return false;
+        if (!isValidRegex(r.matcher)) {
+            console.warn('[Favicon Matcher] Invalid Regex:', r.matcher);
+            return false;
+        }
         try {
             const regex = new RegExp(r.matcher);
             return regex.test(currentUrl);
         } catch (e) {
-            console.warn('[Favicon Matcher] Invalid Regex:', r.matcher);
             return false;
         }
     });
@@ -35,7 +40,13 @@ export const findConflictingRule = (targetUrl: string, currentScope: 'domain' | 
 
         const regexMatch = rules.find(r => {
             if (r.matchType !== 'regex') return false;
-            try { return new RegExp(r.matcher).test(targetUrl); } catch { return false; }
+            if (!isValidRegex(r.matcher)) return false;
+            try {
+                const regex = new RegExp(r.matcher);
+                return regex.test(targetUrl);
+            } catch (e) {
+                return false;
+            }
         });
         if (regexMatch) return regexMatch;
     }

@@ -28,7 +28,17 @@ export const logger = {
 
         // Always console log for immediate debugging
         const timestamp = new Date().toISOString();
-        const logEntry = `[${level}] ${timestamp}: ${message} ${data ? JSON.stringify(data) : ''}`;
+        
+        let dataStr = '';
+        if (data) {
+            if (data instanceof Error) {
+                dataStr = JSON.stringify({ message: data.message, stack: data.stack, name: data.name });
+            } else {
+                dataStr = JSON.stringify(data);
+            }
+        }
+
+        const logEntry = `[${level}] ${timestamp}: ${message} ${dataStr}`;
 
         if (level === LogLevel.ERROR) {
             console.error(logEntry);
