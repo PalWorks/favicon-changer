@@ -9,41 +9,58 @@ import { findBestRule } from './utils/matcher';
 // Change Mark Attribute to prevent observer loops
 const CHANGE_MARK = 'data-fc-modified';
 
-// Function to find and replace/update the favicon
+// Tracks whether WE have actually mutated this page's favicon. Used so we never
+// touch the DOM on pages where no rule applies (which previously disrupted some
+// SPAs, e.g. GA4's header component, by churning <head> needlessly).
+let hasModified = false;
+
+// Function to find and replace/update the favicon.
+// We reuse an existing <link> node in place where possible instead of
+// remove-then-recreate, to minimize <head> mutations that can disrupt
+// frameworks that read or observe the favicon during boot.
 function updateFavicon(url: string) {
   const head = document.getElementsByTagName('head')[0];
   if (!head) return;
 
-  // 1. Find all existing favicon links
-  const existingLinks = document.querySelectorAll("link[rel*='icon']");
+  // Use Array.from to avoid selector injection with special characters in URL.
+  const iconLinks = Array.from(document.querySelectorAll("link[rel*='icon']")) as HTMLLinkElement[];
 
-  // 2. Remove them all to avoid conflicts
-  existingLinks.forEach(link => {
-    // Check if it's already our correct link
-    if (link.getAttribute('href') === url && link.getAttribute('rel') === 'icon') {
-      // Ensure it's marked as ours
-      if (!link.hasAttribute(CHANGE_MARK)) {
-        link.setAttribute(CHANGE_MARK, 'true');
-      }
+  // 1. Is there already a link pointing at our target URL?
+  let ourLink = iconLinks.find(link => link.getAttribute('href') === url);
+
+  if (ourLink) {
+    // Normalize + mark it as ours without recreating the node.
+    if (ourLink.getAttribute('rel') !== 'icon') ourLink.setAttribute('rel', 'icon');
+    if (!ourLink.hasAttribute(CHANGE_MARK)) ourLink.setAttribute(CHANGE_MARK, 'true');
+  } else {
+    // 2. Repurpose an existing icon link in place (prefer one we already own).
+    const reusable = iconLinks.find(link => link.hasAttribute(CHANGE_MARK)) || iconLinks[0];
+    if (reusable) {
+      reusable.setAttribute('type', 'image/png');
+      reusable.setAttribute('rel', 'icon');
+      reusable.setAttribute('href', url);
+      reusable.setAttribute(CHANGE_MARK, 'true');
+      ourLink = reusable;
     } else {
+      const link = document.createElement('link');
+      link.type = 'image/png';
+      link.rel = 'icon';
+      link.href = url;
+      link.setAttribute(CHANGE_MARK, 'true');
+      head.appendChild(link);
+      ourLink = link;
+      logger.debug('[Content] Appended new favicon link');
+    }
+    hasModified = true;
+  }
+
+  // 3. Remove any remaining icon links so the browser can't pick a stale one.
+  iconLinks.forEach(link => {
+    if (link !== ourLink) {
       link.remove();
+      hasModified = true;
     }
   });
-
-  // 3. Ensure our link exists
-  // Use Array.from to avoid selector injection attacks with special characters in URL
-  const currentLink = Array.from(document.querySelectorAll("link[rel*='icon']"))
-    .find(link => link.getAttribute('href') === url);
-
-  if (!currentLink) {
-    const link = document.createElement('link');
-    link.type = 'image/png';
-    link.rel = 'icon';
-    link.href = url;
-    link.setAttribute(CHANGE_MARK, 'true');
-    head.appendChild(link);
-    logger.debug('[Content] Appended new favicon link');
-  }
 }
 
 // --- MATCHING ENGINE ---
@@ -135,6 +152,8 @@ function restoreOriginalFavicon() {
     markedLinks.forEach(link => link.remove());
     logger.info('[Content] No original favicon to restore, removed custom links.');
   }
+  // We are back to the original state; further no-rule re-applies are no-ops.
+  hasModified = false;
 }
 
 // Initial Load Logic
@@ -165,9 +184,15 @@ function applyRule() {
       updateFavicon(settings.defaultFaviconUrl);
       setupObserver(settings.defaultFaviconUrl);
     } else {
-      // No rule matches -> Restore original
-      logger.debug('[Content] No rule matched. Restoring original.');
-      restoreOriginalFavicon();
+      // No rule matches. Only restore if WE previously changed this page.
+      // On a normal page where the extension was never active, do nothing at
+      // all so we never disturb the host page's favicon or <head>.
+      if (hasModified) {
+        logger.debug('[Content] No rule matched. Restoring original.');
+        restoreOriginalFavicon();
+      } else {
+        logger.debug('[Content] No rule matched and page untouched. Leaving favicon as-is.');
+      }
       // We might want to disconnect the observer if we are back to normal
       if (observer) {
         observer.disconnect();
