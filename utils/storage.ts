@@ -108,6 +108,7 @@ export const deleteRule = async (id: string): Promise<void> => {
 export const saveSettings = async (settings: GlobalSettings): Promise<void> => {
   const data = await getStorageData();
   await persistData({ ...data, settings });
+  notifyTabs();
 };
 
 const persistData = async (data: StorageData): Promise<void> => {
