@@ -219,12 +219,18 @@ function applyRule() {
 }
 
 // Listen for messages from Popup/Options
-chrome.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
   logger.debug('[Content] Message received:', message);
-  if (message.type === 'RulesUpdated') {
+  if (message.type === 'PING') {
+    // Responds to ensureContentScriptReady() in messaging.ts so the caller
+    // knows the content script is loaded without needing a script injection.
+    sendResponse({ ok: true });
+  } else if (message.type === 'RulesUpdated') {
     logger.info('[Content] RulesUpdated received, re-applying rules...');
     applyRule();
+    sendResponse({ ok: true });
   } else if (message.type === 'RESET_ICON') {
+    sendResponse({ ok: true });
     if (observer) observer.disconnect();
     window.location.reload();
   }

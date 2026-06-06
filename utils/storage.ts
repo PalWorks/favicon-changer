@@ -60,12 +60,21 @@ export const getStorageData = async (): Promise<StorageData> => {
           });
 
           if (hasMigrated) {
-            chrome.storage.local.set({ rules: migratedRules, migrated: true });
+            chrome.storage.local.set({ rules: migratedRules, migrated: true }, () => {
+              if (chrome.runtime.lastError) {
+                logger.error('[Storage] Migration persist failed:', chrome.runtime.lastError.message);
+              } else {
+                logger.info('Migration completed successfully.');
+              }
+            });
             rules = migratedRules;
-            logger.info('Migration completed successfully.');
           } else {
-            // If no migration needed, just mark as migrated to skip next time
-            chrome.storage.local.set({ migrated: true });
+            // Mark as migrated so we never re-run this scan.
+            chrome.storage.local.set({ migrated: true }, () => {
+              if (chrome.runtime.lastError) {
+                logger.error('[Storage] Migration flag failed:', chrome.runtime.lastError.message);
+              }
+            });
           }
       }
       // -------------------------------------------------------------------
@@ -160,14 +169,13 @@ import { sendMessageToTab, isRestrictedUrl } from './messaging';
 export const notifyTabs = () => {
   if (!IS_DEV) {
     chrome.tabs.query({}, (tabs: any[]) => {
+      if (chrome.runtime.lastError) {
+        logger.warn('[Storage] tabs.query failed:', chrome.runtime.lastError.message);
+        return;
+      }
       tabs.forEach(tab => {
-        if (tab.id) {
-          if (!isRestrictedUrl(tab.url)) {
-            // logger.debug(`Notifying tab ${tab.id} (${tab.url})`);
-            sendMessageToTab(tab.id, { type: 'RulesUpdated' });
-          } else {
-             // logger.debug(`Skipping restricted tab ${tab.id} (${tab.url})`);
-          }
+        if (tab.id && !isRestrictedUrl(tab.url)) {
+          sendMessageToTab(tab.id, { type: 'RulesUpdated' });
         }
       });
     });
