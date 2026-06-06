@@ -3,6 +3,11 @@ import { EmojiCategory } from "./types";
 export const EXTENSION_WIDTH = 400;
 export const EXTENSION_HEIGHT = 600;
 
+// Debounce window for the MutationObserver in the content script.
+// Prevents rapid favicon reassertions by SPAs from triggering a
+// synchronous updateFavicon on every individual DOM mutation.
+export const OBSERVER_DEBOUNCE_MS = 100;
+
 export const DEFAULT_EMOJIS = ['🚀', '🔥', '✨', '💻', '🎨', '🛡️', '❤️', '✅', '⚠️', '👀', '🧠', '🤖'];
 
 export const EMOJI_LIBRARY: EmojiCategory[] = [

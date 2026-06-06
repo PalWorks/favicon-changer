@@ -5,6 +5,7 @@ declare const chrome: any;
 import { FaviconRule, GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
+import { OBSERVER_DEBOUNCE_MS } from './constants';
 
 // Change Mark Attribute to prevent observer loops
 const CHANGE_MARK = 'data-fc-modified';
@@ -68,10 +69,12 @@ function updateFavicon(url: string) {
 
 let observer: MutationObserver | null = null;
 let intervalId: any = null;
+let observerDebounceTimer: any = null;
 
 function setupObserver(targetUrl: string) {
   if (observer) observer.disconnect();
   if (intervalId) clearInterval(intervalId);
+  if (observerDebounceTimer) clearTimeout(observerDebounceTimer);
 
   const head = document.querySelector('head');
   if (!head) return;
@@ -105,8 +108,13 @@ function setupObserver(targetUrl: string) {
     }
 
     if (shouldUpdate) {
-      logger.debug('[Content] Detected external change, re-applying...');
-      updateFavicon(targetUrl);
+      // Debounce: coalesce rapid mutation bursts (e.g. SPA re-hydration) into
+      // a single updateFavicon call to avoid thrashing the event loop.
+      clearTimeout(observerDebounceTimer);
+      observerDebounceTimer = setTimeout(() => {
+        logger.debug('[Content] Detected external change, re-applying (debounced)...');
+        updateFavicon(targetUrl);
+      }, OBSERVER_DEBOUNCE_MS);
     }
   });
 
@@ -193,7 +201,7 @@ function applyRule() {
       } else {
         logger.debug('[Content] No rule matched and page untouched. Leaving favicon as-is.');
       }
-      // We might want to disconnect the observer if we are back to normal
+      // Tear down all polling/observation now that the extension is inactive.
       if (observer) {
         observer.disconnect();
         observer = null;
@@ -201,6 +209,10 @@ function applyRule() {
       if (intervalId) {
         clearInterval(intervalId);
         intervalId = null;
+      }
+      if (observerDebounceTimer) {
+        clearTimeout(observerDebounceTimer);
+        observerDebounceTimer = null;
       }
     }
   });
