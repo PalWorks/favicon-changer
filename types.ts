@@ -30,6 +30,7 @@ export interface FaviconRule {
 export interface GlobalSettings {
   defaultFaviconUrl?: string; // Fallback if no site favicon exists
   enableFileAccessWarning: boolean;
+  excludedDomains: string[];  // Hostnames where the extension does nothing
 }
 
 export interface StorageData {

@@ -11,7 +11,7 @@ import './index.css';
 
 const OptionsApp: React.FC = () => {
     const [rules, setRules] = useState<FaviconRule[]>([]);
-    const [settings, setSettings] = useState<GlobalSettingsType>({ enableFileAccessWarning: true });
+    const [settings, setSettings] = useState<GlobalSettingsType>({ enableFileAccessWarning: true, excludedDomains: [] });
     const [editingRule, setEditingRule] = useState<FaviconRule | null>(null);
 
     // Load data

@@ -12,7 +12,8 @@ export const generateId = (): string => {
 };
 
 const DEFAULT_SETTINGS: GlobalSettings = {
-  enableFileAccessWarning: true
+  enableFileAccessWarning: true,
+  excludedDomains: [],
 };
 
 export const getStorageData = async (): Promise<StorageData> => {

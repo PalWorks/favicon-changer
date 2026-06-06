@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { GlobalSettings as GlobalSettingsType } from '../../types';
 import { FaviconPreview } from '../FaviconPreview';
 import { Button } from '../Button';
@@ -12,6 +12,7 @@ interface GlobalSettingsProps {
 
 export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSettingsChange, onRefresh }) => {
     const importInputRef = useRef<HTMLInputElement>(null);
+    const [newExcludedDomain, setNewExcludedDomain] = useState('');
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -33,6 +34,19 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
 
     const handleGlobalFallbackChange = async (url: string) => {
         onSettingsChange({ ...settings, defaultFaviconUrl: url || undefined });
+    };
+
+    const excludedDomains = settings.excludedDomains ?? [];
+
+    const handleAddExclusion = () => {
+        const domain = newExcludedDomain.trim().toLowerCase();
+        if (!domain || excludedDomains.includes(domain)) return;
+        onSettingsChange({ ...settings, excludedDomains: [...excludedDomains, domain] });
+        setNewExcludedDomain('');
+    };
+
+    const handleRemoveExclusion = (domain: string) => {
+        onSettingsChange({ ...settings, excludedDomains: excludedDomains.filter(d => d !== domain) });
     };
 
     return (
@@ -57,6 +71,42 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                             <FaviconPreview url={settings.defaultFaviconUrl || ''} />
                         </div>
                     </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Excluded Sites</label>
+                    <p className="text-xs text-slate-500 mb-3">
+                        The extension will never touch these domains — no favicon changes, no DOM mutations.
+                    </p>
+                    <div className="flex gap-2 mb-3">
+                        <input
+                            type="text"
+                            placeholder="e.g. analytics.google.com"
+                            value={newExcludedDomain}
+                            onChange={e => setNewExcludedDomain(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddExclusion(); }}
+                            className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm"
+                        />
+                        <Button size="sm" variant="secondary" onClick={handleAddExclusion}>
+                            Add
+                        </Button>
+                    </div>
+                    {excludedDomains.length > 0 && (
+                        <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {excludedDomains.map(domain => (
+                                <li key={domain} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-sm">
+                                    <span className="text-slate-700 font-mono text-xs">{domain}</span>
+                                    <button
+                                        onClick={() => handleRemoveExclusion(domain)}
+                                        className="text-slate-400 hover:text-red-500 transition-colors ml-2 text-base leading-none"
+                                        aria-label={`Remove ${domain}`}
+                                    >
+                                        ×
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
 
                 <div className="pt-4 border-t border-slate-100 flex gap-2">

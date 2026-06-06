@@ -180,6 +180,12 @@ function applyRule() {
     const rules = result.rules || {};
     const settings = (result.settings || {}) as GlobalSettings;
 
+    // Per-site exclusion list: leave the page completely untouched.
+    if (settings.excludedDomains?.includes(currentDomain)) {
+      logger.debug('[Content] Domain is excluded. Leaving favicon as-is.');
+      return;
+    }
+
     const rule = findBestRule(currentUrl, currentDomain, Object.values(rules));
     logger.debug('[Content] Checking rules for:', { currentUrl, ruleFound: !!rule });
 
