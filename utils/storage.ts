@@ -12,7 +12,6 @@ export const generateId = (): string => {
 };
 
 const DEFAULT_SETTINGS: GlobalSettings = {
-  enableFileAccessWarning: true,
   excludedDomains: [],
 };
 
@@ -116,8 +115,14 @@ const persistData = async (data: StorageData): Promise<void> => {
     localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(data));
     return;
   }
-  return new Promise((resolve) => {
-    chrome.storage.local.set(data, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(data, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
   });
 };
 
@@ -135,23 +140,27 @@ export const exportRulesAsJson = async () => {
   downloadAnchorNode.remove();
 };
 
-export const importRulesFromJson = async (jsonString: string): Promise<{ success: boolean; count: number }> => {
+export const importRulesFromJson = async (jsonString: string): Promise<{ success: boolean; count: number; remoteCount: number }> => {
   try {
     const parsed = JSON.parse(jsonString);
-    if (typeof parsed !== 'object' || parsed === null) return { success: false, count: 0 };
+    if (typeof parsed !== 'object' || parsed === null) return { success: false, count: 0, remoteCount: 0 };
 
     // Validate items
     let validCount = 0;
+    let remoteCount = 0; // rules whose favicon is a remote URL (fetched on apply)
     const validatedRules: Record<string, FaviconRule> = {};
 
     Object.values(parsed).forEach((item: any) => {
       if (item.id && item.matcher && item.faviconUrl) {
         validatedRules[item.id] = item;
         validCount++;
+        // A non-data: favicon is fetched from its origin every time the rule
+        // applies — worth flagging since an imported file could point anywhere.
+        if (!String(item.faviconUrl).startsWith('data:')) remoteCount++;
       }
     });
 
-    if (validCount === 0) return { success: false, count: 0 };
+    if (validCount === 0) return { success: false, count: 0, remoteCount: 0 };
 
     const { rules: currentRules, settings } = await getStorageData();
     const mergedRules = { ...currentRules, ...validatedRules };
@@ -159,10 +168,10 @@ export const importRulesFromJson = async (jsonString: string): Promise<{ success
     await persistData({ rules: mergedRules, settings });
     notifyTabs();
 
-    return { success: true, count: validCount };
+    return { success: true, count: validCount, remoteCount };
   } catch (e) {
     logger.error("Import failed", e);
-    return { success: false, count: 0 };
+    return { success: false, count: 0, remoteCount: 0 };
   }
 };
 
@@ -238,6 +247,85 @@ export const getCurrentTabInfo = async (): Promise<TabInfo> => {
       }
     });
   });
+};
+
+// --- Editor handoff (popup -> standalone window) ---
+//
+// The toolbar action popup auto-closes the instant it loses focus. On Linux
+// (and intermittently on Windows/macOS) opening a native file-picker dialog
+// blurs the popup, so the popup is destroyed before the user can pick a file
+// -> the upload silently aborts with no feedback. To make uploads reliable on
+// every OS we hand the current target off to a real extension window, which
+// does NOT close on blur, and run the file picker there.
+
+const PENDING_TARGET_KEY = 'pendingEditorTarget';
+
+export interface PendingEditorTarget {
+  url: string;
+  domain: string;
+  favIconUrl: string;
+  scope: 'domain' | 'exact_url';
+  // Optional: when the window is opened from the toolbar icon (not a Browse
+  // handoff) no section is pre-opened, mirroring the collapsed bubble.
+  section?: 'upload' | 'emoji' | 'badge';
+}
+
+export const setPendingEditorTarget = async (target: PendingEditorTarget): Promise<void> => {
+  if (IS_DEV) {
+    localStorage.setItem(PENDING_TARGET_KEY, JSON.stringify(target));
+    return;
+  }
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [PENDING_TARGET_KEY]: target }, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+export const consumePendingEditorTarget = async (): Promise<PendingEditorTarget | null> => {
+  if (IS_DEV) {
+    const raw = localStorage.getItem(PENDING_TARGET_KEY);
+    if (raw) localStorage.removeItem(PENDING_TARGET_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+  return new Promise((resolve) => {
+    if (!chrome.storage || !chrome.storage.local) {
+      resolve(null);
+      return;
+    }
+    chrome.storage.local.get(PENDING_TARGET_KEY, (result: any) => {
+      const target = (result && result[PENDING_TARGET_KEY]) || null;
+      if (target) chrome.storage.local.remove(PENDING_TARGET_KEY);
+      resolve(target);
+    });
+  });
+};
+
+/**
+ * Opens the editor in a standalone popup window pre-targeted to `target`.
+ * Used by the action popup to escape the popup-closes-on-file-dialog trap so
+ * that file uploads work reliably across Windows, macOS and Linux.
+ */
+export const openExpandedEditor = async (target: PendingEditorTarget): Promise<void> => {
+  await setPendingEditorTarget(target);
+  const url = chrome.runtime.getURL('index.html?expanded=1');
+  try {
+    if (typeof chrome !== 'undefined' && chrome.windows && chrome.windows.create) {
+      chrome.windows.create({ url, type: 'popup', width: 460, height: 720, focused: true });
+      return;
+    }
+  } catch (e) {
+    logger.warn('windows.create failed, falling back to tab:', e);
+  }
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) {
+    chrome.tabs.create({ url });
+  } else {
+    window.open(url, '_blank');
+  }
 };
 
 export const openOptionsPage = () => {

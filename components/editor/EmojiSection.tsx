@@ -2,12 +2,13 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Accordion } from '../Accordion';
 import { EMOJI_LIBRARY } from '../../constants';
 import { EmojiItem, FaviconRule } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface EmojiSectionProps {
     isOpen: boolean;
     onToggle: () => void;
     initialValues?: FaviconRule['metadata'];
-    onSave: (url: string, type: 'emoji', metadata: FaviconRule['metadata']) => void;
+    onSave: (url: string, type: 'emoji', metadata: FaviconRule['metadata']) => Promise<void>;
 }
 
 export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, initialValues, onSave }) => {
@@ -22,7 +23,7 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
         }
     }, [initialValues]);
 
-    const saveEmoji = (emoji: string) => {
+    const saveEmoji = async (emoji: string) => {
         setSelectedEmoji(emoji);
         const canvas = document.createElement('canvas');
         canvas.width = 64;
@@ -34,7 +35,11 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
             ctx.textBaseline = 'middle';
             ctx.fillText(emoji, 32, 34);
             const dataUrl = canvas.toDataURL('image/png');
-            onSave(dataUrl, 'emoji', { emojiChar: emoji });
+            try {
+                await onSave(dataUrl, 'emoji', { emojiChar: emoji });
+            } catch (e) {
+                logger.error('Emoji save failed:', e);
+            }
         }
     };
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 import { isValidFileType, isValidFileSize, isValidUrl } from '../../utils/validation';
-import { compressFaviconDataUrl } from '../../utils/canvas';
+import { compressFaviconDataUrl, normalizeImageDataUrl } from '../../utils/canvas';
 import { Button } from '../Button';
 import { Accordion } from '../Accordion';
 import { logger } from '../../utils/logger';
@@ -13,17 +13,22 @@ interface UploadSectionProps {
     isOpen: boolean;
     onToggle: () => void;
     initialValues?: FaviconRule['metadata'];
-    onSave: (url: string, type: 'upload' | 'url', metadata: FaviconRule['metadata']) => void;
+    onSave: (url: string, type: 'upload' | 'url', metadata: FaviconRule['metadata']) => Promise<void>;
     onError: (msg: string) => void;
     onSuccess: (msg: string) => void;
     isLoading?: boolean;
+    // When provided (action popup only), clicking "Browse" hands off to a
+    // standalone window instead of opening a native dialog, because the action
+    // popup closes itself the moment an OS file dialog steals focus.
+    onRequestExpand?: () => void;
 }
 
-export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, initialValues, onSave, onError, onSuccess, isLoading }) => {
+export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, initialValues, onSave, onError, onSuccess, isLoading, onRequestExpand }) => {
     const [pendingImage, setPendingImage] = useState<string | null>(null);
     const [imageMode, setImageMode] = useState<ImageMode>('contain');
     const [processedPreview, setProcessedPreview] = useState<string | null>(null);
     const [customUrl, setCustomUrl] = useState('');
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -53,7 +58,12 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
 
                 ctx.clearRect(0, 0, SIZE, SIZE);
 
-                const aspect = img.width / img.height;
+                // SVGs sized only by viewBox report width/height of 0 in some
+                // browsers; fall back to a square so the aspect math can't divide
+                // by zero (which would produce NaN draw coords -> a blank icon).
+                const iw = img.width || img.naturalWidth || SIZE;
+                const ih = img.height || img.naturalHeight || SIZE;
+                const aspect = iw / ih;
                 let dx = 0, dy = 0, dw = SIZE, dh = SIZE;
 
                 if (imageMode === 'contain') {
@@ -65,9 +75,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                         dx = (SIZE - dw) / 2;
                     }
                 } else if (imageMode === 'cover') {
-                    const scale = Math.max(SIZE / img.width, SIZE / img.height);
-                    const scaledWidth = img.width * scale;
-                    const scaledHeight = img.height * scale;
+                    const scale = Math.max(SIZE / iw, SIZE / ih);
+                    const scaledWidth = iw * scale;
+                    const scaledHeight = ih * scale;
                     dx = (SIZE - scaledWidth) / 2;
                     dy = (SIZE - scaledHeight) / 2;
                     dw = scaledWidth;
@@ -88,12 +98,21 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
 
         img.onerror = (err) => {
             logger.error('Image load error:', err);
+            // A frequent cause is a MIME mismatch: an SVG saved/served with the
+            // wrong (e.g. .png) type, so the bytes can't decode under that label.
+            // Sniff + relabel once and retry before giving up.
             if (pendingImage.startsWith('data:')) {
-                setProcessedPreview(pendingImage);
-            } else {
-                onError('Failed to process image.');
-                setPendingImage(null);
+                const fixed = normalizeImageDataUrl(pendingImage);
+                if (fixed !== pendingImage) {
+                    logger.log('Retrying image with corrected MIME type (svg).');
+                    setPendingImage(fixed); // re-runs this effect with the fixed URL
+                    return;
+                }
             }
+            // Genuinely undecodable — surface an error instead of rendering a
+            // broken preview the user can't act on.
+            onError('Could not read that image. Try a PNG, JPEG, SVG, or WebP file.');
+            setPendingImage(null);
         };
 
         if (pendingImage.startsWith('http')) {
@@ -102,10 +121,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
         img.src = pendingImage;
     }, [pendingImage, imageMode]);
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    // Shared by the file picker and drag-and-drop. Neither opens an OS dialog
+    // once we have the File object, so this is safe even inside the popup.
+    const processFile = (file: File) => {
         if (!isValidFileType(file)) {
             onError('Invalid file type. Please upload PNG, JPEG, SVG, or WebP.');
             return;
@@ -121,46 +139,70 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
         const reader = new FileReader();
         reader.onloadend = () => {
             try {
-                const result = reader.result as string;
-                setTimeout(() => {
-                    try {
-                        setPendingImage(result);
-                        setImageMode('contain');
-                        onSuccess(''); // Clear status
-                    } catch (innerErr) {
-                        logger.error('Crash inside setTimeout:', innerErr);
-                    }
-                }, 500);
+                // Correct a mislabeled MIME (e.g. an SVG saved as .png) up front so
+                // the image decodes on the first try instead of erroring + retrying.
+                setPendingImage(normalizeImageDataUrl(reader.result as string));
+                setImageMode('contain');
+                onSuccess(''); // Clear status
             } catch (err) {
+                logger.error('Failed to load image data:', err);
                 onError('Failed to load image data.');
             }
         };
+        reader.onerror = () => {
+            logger.error('FileReader error', reader.error);
+            onError('Failed to read the selected file.');
+        };
         reader.readAsDataURL(file);
-        e.target.value = '';
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allow re-selecting the same file
+        if (!file) return;
+        processFile(file);
+    };
+
+    // In the action popup, opening a native file dialog closes the popup, so
+    // hand off to a standalone window. Everywhere else, open the dialog directly.
+    const handleBrowse = () => {
+        if (onRequestExpand) {
+            onRequestExpand();
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) processFile(file);
     };
 
     const handleApply = async () => {
-        if (processedPreview) {
-            try {
-                // Compress before saving to ensure we don't hit storage limits
-                const compressed = await compressFaviconDataUrl(processedPreview);
-                onSave(compressed, 'upload', { imageMode });
-                setPendingImage(null);
-            } catch (e) {
-                logger.error('Compression failed:', e);
-                onError('Failed to compress image.');
-            }
+        if (!processedPreview) return;
+        try {
+            const compressed = await compressFaviconDataUrl(processedPreview);
+            await onSave(compressed, 'upload', { imageMode });
+            setPendingImage(null);
+        } catch (e) {
+            // handleSave already showed the error via statusMessage; keep pendingImage so the user can retry
+            logger.error('Apply failed:', e);
         }
     };
 
-    const handleUrlApply = () => {
-        if (customUrl) {
-            if (!isValidUrl(customUrl)) {
-                onError('Invalid URL format.');
-                return;
-            }
-            onSave(customUrl, 'url', {});
+    const handleUrlApply = async () => {
+        if (!customUrl) return;
+        if (!isValidUrl(customUrl)) {
+            onError('Invalid URL format.');
+            return;
+        }
+        try {
+            await onSave(customUrl, 'url', {});
             setCustomUrl('');
+        } catch (e) {
+            logger.error('URL apply failed:', e);
         }
     };
 
@@ -172,7 +214,16 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                         <div className="text-xs font-bold text-slate-500 uppercase mb-2 text-center">Adjust Image</div>
                         <div className="flex justify-center mb-3 bg-white p-2 rounded border border-slate-100 min-h-[80px] items-center">
                             {processedPreview ? (
-                                <img src={processedPreview} className="w-16 h-16 border border-slate-200 rounded object-contain bg-[url('https://www.transparenttextures.com/patterns/checkerboard-cross.png')]" />
+                                <img
+                                    src={processedPreview}
+                                    className="w-16 h-16 border border-slate-200 rounded object-contain"
+                                    // Inline CSS checkerboard (shows transparency behind the
+                                    // preview) — avoids a third-party image request.
+                                    style={{
+                                        backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, #ffffff 0% 50%)',
+                                        backgroundSize: '16px 16px',
+                                    }}
+                                />
                             ) : (
                                 <div className="flex flex-col items-center gap-2">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -192,25 +243,33 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                     </div>
                 ) : (
                     <>
-                        {/* Compact File Upload Row */}
+                        {/* Compact File Upload Row (click to browse / drop a file) */}
                         <div
-                            className="relative h-10 w-full border border-slate-200 bg-slate-50 rounded-lg flex items-center pl-2 pr-1 cursor-pointer hover:bg-white hover:ring-2 hover:ring-indigo-500 transition-all group"
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Click to choose a file"
+                            className={`relative h-10 w-full border rounded-lg flex items-center pl-2 pr-1 cursor-pointer transition-all group ${isDragging ? 'border-indigo-500 ring-2 ring-indigo-400 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:bg-white hover:ring-2 hover:ring-indigo-500'}`}
+                            onClick={handleBrowse}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={handleDrop}
+                            title={onRequestExpand ? 'Open the upload window to choose a file' : 'Click to choose a file, or drop one here'}
                         >
                             <div className="flex items-center gap-2 pl-1 flex-1 min-w-0">
                                 <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 <span className="text-xs text-slate-500 truncate group-hover:text-indigo-600 transition-colors">
-                                    Upload icon (PNG/SVG, 48x48px+)
+                                    {isDragging ? 'Drop image to upload' : 'Upload icon — click or drag & drop'}
                                 </span>
                             </div>
                             <div className="w-16 justify-center bg-white border border-slate-200 text-indigo-600 text-xs font-bold rounded shadow-sm group-hover:border-indigo-200 h-7 flex items-center">
-                                Browse
+                                {onRequestExpand ? 'Open' : 'Browse'}
                             </div>
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/png,image/jpeg,image/svg+xml" onChange={handleFileSelect} />
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={handleFileSelect} />
                         </div>
+                        {onRequestExpand && (
+                            <p className="text-[10px] text-slate-400 px-1 -mt-1 leading-tight">
+                                Opens a small window so the file picker works reliably on every OS. You can also drag an image straight onto the box above.
+                            </p>
+                        )}
 
                         {/* URL Row */}
                         <div className="relative h-10 w-full">

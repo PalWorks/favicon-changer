@@ -13,22 +13,51 @@ export enum LogLevel {
     DEBUG = 'DEBUG'
 }
 
+// Cache the "logging enabled" flag in memory so we don't hit chrome.storage on
+// every single log call (the content script logs on hot paths on every page).
+// The cache is initialized once per context and kept fresh via storage.onChanged.
+let enabledCache: boolean | null = null;
+let initPromise: Promise<void> | null = null;
+
+const ensureInit = (): Promise<void> => {
+    if (enabledCache !== null) return Promise.resolve();
+    if (!initPromise) {
+        initPromise = chrome.storage.local.get(LOG_ENABLED_KEY)
+            .then((r: any) => { enabledCache = !!r[LOG_ENABLED_KEY]; })
+            .catch(() => { enabledCache = false; });
+        // Keep the cache in sync if the toggle changes in another context.
+        try {
+            chrome.storage.onChanged.addListener((changes: any, area: string) => {
+                if (area === 'local' && changes[LOG_ENABLED_KEY]) {
+                    enabledCache = !!changes[LOG_ENABLED_KEY].newValue;
+                }
+            });
+        } catch { /* onChanged unavailable in this context — ignore */ }
+    }
+    return initPromise;
+};
+
 export const logger = {
     async isEnabled(): Promise<boolean> {
-        const result = await chrome.storage.local.get(LOG_ENABLED_KEY);
-        return !!result[LOG_ENABLED_KEY];
+        await ensureInit();
+        return !!enabledCache;
     },
 
     async setEnabled(enabled: boolean) {
+        enabledCache = enabled; // update cache immediately
         await chrome.storage.local.set({ [LOG_ENABLED_KEY]: enabled });
     },
 
     async log(message: string, data?: any, level: LogLevel = LogLevel.INFO) {
-        const enabled = await this.isEnabled();
+        await ensureInit();
+        const enabled = !!enabledCache;
 
-        // Always console log for immediate debugging
+        // Errors always go to the console; everything else only when the user
+        // has opted into verbose logging (keeps page consoles quiet by default).
+        if (!enabled && level !== LogLevel.ERROR) return;
+
         const timestamp = new Date().toISOString();
-        
+
         let dataStr = '';
         if (data) {
             if (data instanceof Error) {
@@ -48,9 +77,7 @@ export const logger = {
             console.log(logEntry);
         }
 
-        // Only save to storage if enabled
-        if (!enabled && level !== LogLevel.ERROR) return; // Always log errors? Or strictly follow toggle? User said "enable logging... capture stuff". Let's strictly follow toggle to save space, but maybe errors are critical. Let's follow toggle for everything to be safe on storage, or maybe allow errors always. 
-        // User said "clog up storage... thus we need enable/disable". So strictly follow toggle.
+        // Persist to storage only while logging is enabled.
         if (!enabled) return;
 
         try {

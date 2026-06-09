@@ -1,13 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Favicon Changer",
-  "version": "1.2.1",
-  "description": "Customize website favicons with AI, Emojis, or Uploads. Features compression, validation, and badge support.",
+  "name": "Favicon Changer Ultimate",
+  "version": "1.3.0",
+  "description": "Customize any site's favicon with emojis, image uploads, or badges & overlays. Per-site rules, local processing, no tracking.",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting",
-    "downloads"
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -18,7 +16,7 @@
   },
   "action": {
     "default_popup": "index.html",
-    "default_title": "Favicon Changer"
+    "default_title": "Favicon Changer Ultimate"
   },
   "options_ui": {
     "page": "options.html",

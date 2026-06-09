@@ -5,7 +5,7 @@ declare const chrome: any;
 import { FaviconRule, GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
-import { OBSERVER_DEBOUNCE_MS } from './constants';
+import { OBSERVER_DEBOUNCE_MS, MAX_STABLE_CHECKS } from './constants';
 
 // Change Mark Attribute to prevent observer loops
 const CHANGE_MARK = 'data-fc-modified';
@@ -16,9 +16,18 @@ const CHANGE_MARK = 'data-fc-modified';
 let hasModified = false;
 
 // Function to find and replace/update the favicon.
-// We reuse an existing <link> node in place where possible instead of
-// remove-then-recreate, to minimize <head> mutations that can disrupt
-// frameworks that read or observe the favicon during boot.
+//
+// IMPORTANT — why we mutate an EXISTING link's href instead of recreating nodes:
+// Chrome only re-paints a tab-strip favicon from a DOM change in two situations:
+//   (a) the tab is the active/foreground tab, OR
+//   (b) the `href` of a <link> element Chrome is ALREADY TRACKING is mutated.
+// Adding a brand-new <link> (or remove-then-append) is NOT picked up for
+// background/inactive tabs — Chrome keeps showing the load-time favicon until
+// the tab is reloaded. This was verified empirically: an href mutation repaints
+// a background tab, a fresh-node insert does not. (It's also how sites like
+// Gmail update their unread-count favicon while in the background.)
+// So we always repurpose the existing tracked icon link in place; only when a
+// page has no icon link at all do we create one.
 function updateFavicon(url: string) {
   const head = document.getElementsByTagName('head')[0];
   if (!head) return;
@@ -26,41 +35,34 @@ function updateFavicon(url: string) {
   // Use Array.from to avoid selector injection with special characters in URL.
   const iconLinks = Array.from(document.querySelectorAll("link[rel*='icon']")) as HTMLLinkElement[];
 
-  // 1. Is there already a link pointing at our target URL?
-  let ourLink = iconLinks.find(link => link.getAttribute('href') === url);
+  // Reuse the element Chrome is already tracking — prefer one we own, else the
+  // page's own first icon link (the one Chrome started tracking at load).
+  let ourLink = iconLinks.find(link => link.hasAttribute(CHANGE_MARK)) || iconLinks[0];
 
   if (ourLink) {
-    // Normalize + mark it as ours without recreating the node.
+    // Mutating href on the tracked element is what triggers the repaint
+    // (including on background tabs). Skip the write if it's already correct so
+    // re-applies of an unchanged icon don't cause a needless tab-icon flash.
+    if (ourLink.getAttribute('href') !== url) ourLink.setAttribute('href', url);
     if (ourLink.getAttribute('rel') !== 'icon') ourLink.setAttribute('rel', 'icon');
     if (!ourLink.hasAttribute(CHANGE_MARK)) ourLink.setAttribute(CHANGE_MARK, 'true');
   } else {
-    // 2. Repurpose an existing icon link in place (prefer one we already own).
-    const reusable = iconLinks.find(link => link.hasAttribute(CHANGE_MARK)) || iconLinks[0];
-    if (reusable) {
-      reusable.setAttribute('type', 'image/png');
-      reusable.setAttribute('rel', 'icon');
-      reusable.setAttribute('href', url);
-      reusable.setAttribute(CHANGE_MARK, 'true');
-      ourLink = reusable;
-    } else {
-      const link = document.createElement('link');
-      link.type = 'image/png';
-      link.rel = 'icon';
-      link.href = url;
-      link.setAttribute(CHANGE_MARK, 'true');
-      head.appendChild(link);
-      ourLink = link;
-      logger.debug('[Content] Appended new favicon link');
-    }
-    hasModified = true;
+    // No icon link exists on the page — create one. (Active tabs repaint
+    // immediately; a background tab with no prior favicon may not repaint until
+    // it is next activated, which is an acceptable edge case.)
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = url;
+    link.setAttribute(CHANGE_MARK, 'true');
+    head.appendChild(link);
+    ourLink = link;
+    logger.debug('[Content] Appended new favicon link');
   }
+  hasModified = true;
 
-  // 3. Remove any remaining icon links so the browser can't pick a stale one.
+  // Remove any remaining icon links so the browser can't pick a stale one.
   iconLinks.forEach(link => {
-    if (link !== ourLink) {
-      link.remove();
-      hasModified = true;
-    }
+    if (link !== ourLink) link.remove();
   });
 }
 
@@ -114,13 +116,25 @@ function setupObserver(targetUrl: string) {
       observerDebounceTimer = setTimeout(() => {
         logger.debug('[Content] Detected external change, re-applying (debounced)...');
         updateFavicon(targetUrl);
+        // Re-arm the backup poller in case it had stopped after being stable.
+        if (!intervalId) startVerificationInterval(targetUrl);
       }, OBSERVER_DEBOUNCE_MS);
     }
   });
 
   observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href', 'rel'] });
 
-  // B. Interval Check (Backup for SPAs/Hydration)
+  // B. Interval Check (Backup for SPAs/Hydration). Self-stops once stable.
+  startVerificationInterval(targetUrl);
+}
+
+// Backup poller: re-applies our favicon if the page swaps it out. Once it has
+// been stable for MAX_STABLE_CHECKS consecutive ticks it stops itself, so we
+// don't keep waking up the event loop forever on quiet pages. The
+// MutationObserver re-arms it (above) if the favicon is later changed.
+function startVerificationInterval(targetUrl: string) {
+  if (intervalId) clearInterval(intervalId);
+  let stableChecks = 0;
   intervalId = setInterval(() => {
     // Safer check avoiding selector injection
     const currentLink = Array.from(document.querySelectorAll("link[rel*='icon']"))
@@ -129,6 +143,10 @@ function setupObserver(targetUrl: string) {
     if (!currentLink) {
       logger.debug('[Content] Interval check failed, re-applying...');
       updateFavicon(targetUrl);
+      stableChecks = 0;
+    } else if (++stableChecks >= MAX_STABLE_CHECKS) {
+      clearInterval(intervalId);
+      intervalId = null;
     }
   }, 2000); // Check every 2 seconds
 }
@@ -164,7 +182,9 @@ function restoreOriginalFavicon() {
   hasModified = false;
 }
 
-// Initial Load Logic
+// Initial Load Logic. Also re-run on RulesUpdated; updateFavicon() mutates the
+// tracked icon link's href in place, which repaints the tab (active OR
+// background) without a page reload — see the note on updateFavicon().
 function applyRule() {
   captureOriginalFavicon();
 
@@ -233,7 +253,7 @@ chrome.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
     sendResponse({ ok: true });
   } else if (message.type === 'RulesUpdated') {
     logger.info('[Content] RulesUpdated received, re-applying rules...');
-    applyRule();
+    applyRule(); // href mutation repaints the tab (active or background) without reload
     sendResponse({ ok: true });
   } else if (message.type === 'RESET_ICON') {
     sendResponse({ ok: true });
@@ -245,7 +265,8 @@ chrome.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
 // Run on start
 logger.info('[Content] Content Script Loaded');
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', applyRule);
+  // Wrap so the DOMContentLoaded Event object isn't passed to applyRule().
+  document.addEventListener('DOMContentLoaded', () => applyRule());
 } else {
   applyRule();
 }

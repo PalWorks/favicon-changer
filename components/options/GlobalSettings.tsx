@@ -22,7 +22,10 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
             const content = ev.target?.result as string;
             const result = await importRulesFromJson(content);
             if (result.success) {
-                alert(`Successfully imported ${result.count} rules!`);
+                const note = result.remoteCount > 0
+                    ? `\n\nNote: ${result.remoteCount} rule(s) use a remote image URL that will be fetched from its source whenever the rule applies.`
+                    : '';
+                alert(`Successfully imported ${result.count} rules!${note}`);
                 onRefresh();
             } else {
                 alert('Failed to import rules. Please check the file format.');

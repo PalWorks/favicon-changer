@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson } from '../utils/storage';
+import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson, openExpandedEditor, consumePendingEditorTarget } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { findConflictingRule } from '../utils/matcher';
 
@@ -10,13 +10,23 @@ import { UploadSection } from './editor/UploadSection';
 import { EmojiSection } from './editor/EmojiSection';
 import { BadgeSection } from './editor/BadgeSection';
 
+// On Linux/BSD/ChromeOS the toolbar action popup closes the instant a native
+// file-picker dialog opens, which aborts uploads. There we hand the upload off
+// to a standalone window. Windows/macOS keep the popup open, so click-to-browse
+// works directly in the bubble — no second window needed.
+const POPUP_DROPS_ON_FILE_DIALOG =
+    /Linux|CrOS|BSD/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
+
 interface FaviconEditorProps {
     mode: 'popup' | 'options';
+    // 'action'  = the toolbar popup bubble (closes on blur; can't host a file dialog)
+    // 'expanded' = the standalone upload window opened by the action popup
+    context?: 'action' | 'expanded';
     initialRule?: FaviconRule | null;
     onRuleSaved?: () => void;
 }
 
-export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule, onRuleSaved }) => {
+export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'action', initialRule, onRuleSaved }) => {
     const [currentTab, setCurrentTab] = useState<TabInfo>({ url: '', domain: '', favIconUrl: '' });
     const [rules, setRules] = useState<FaviconRule[]>([]);
     const [openSection, setOpenSection] = useState<'upload' | 'emoji' | 'badge' | null>(null);
@@ -31,9 +41,47 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
     const importInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        logger.info(`FaviconEditor Mounted - Mode: ${mode}`);
+        logger.info(`FaviconEditor Mounted - Mode: ${mode} / Context: ${context}`);
         refreshData();
     }, [mode]);
+
+    // Expanded upload window: load the target the action popup handed off, then
+    // auto-open the relevant section so the user can pick a file immediately.
+    useEffect(() => {
+        if (mode !== 'popup' || context !== 'expanded') return;
+        (async () => {
+            const target = await consumePendingEditorTarget();
+            if (target) {
+                logger.debug('Expanded editor: loaded handoff target', target);
+                setCurrentTab({ url: target.url, domain: target.domain, favIconUrl: target.favIconUrl });
+                setApplyScope(target.scope);
+                // Icon-opened window: collapsed like the bubble. Browse-handoff: open upload.
+                setOpenSection(target.section || null);
+            } else {
+                // Opened directly (e.g. user navigated here). Fall back to active tab.
+                const info = await getCurrentTabInfo();
+                setCurrentTab(info);
+                setOpenSection('upload');
+            }
+        })();
+    }, [mode, context]);
+
+    // Action popup can't host a native file dialog without closing itself, so the
+    // "Browse" action hands the current target off to a standalone window.
+    const requestExpandedUpload = async () => {
+        try {
+            await openExpandedEditor({
+                url: currentTab.url,
+                domain: currentTab.domain,
+                favIconUrl: currentTab.favIconUrl,
+                scope: applyScope,
+                section: 'upload',
+            });
+        } catch (e) {
+            logger.error('Failed to open upload window', e);
+            setStatusMessage({ type: 'error', text: 'Could not open the upload window.' });
+        }
+    };
 
     // When initialRule changes (in Options mode), load it
     // 1. Handle Rule Selection / Deselection (Reset)
@@ -105,7 +153,11 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
 
     const refreshData = async () => {
         try {
-            if (mode === 'popup') {
+            // Action popup: re-query the active tab (idempotent). Expanded window:
+            // the target is loaded once by the effect below and must not be
+            // overwritten here — getCurrentTabInfo() in a window would return the
+            // window's own (empty) tab and blank out the target after a save.
+            if (mode === 'popup' && context === 'action') {
                 const info = await getCurrentTabInfo();
                 logger.debug('Popup: Retrieved tab info', info);
                 setCurrentTab(info);
@@ -131,7 +183,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
             if (!targetUrl) {
                 logger.warn('Save failed: No target URL specified');
                 setStatusMessage({ type: 'error', text: 'No target URL specified.' });
-                return;
+                throw new Error('No target URL specified.');
             }
 
             const matcher = applyScope === 'domain' ? targetDomain : targetUrl;
@@ -144,7 +196,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                 faviconUrl: url,
                 originalUrl: existingRule?.originalUrl || (sourceType === 'custom' ? currentTab.favIconUrl : undefined),
                 sourceType,
-                metadata, // Store the metadata
+                metadata,
                 createdAt: Date.now()
             };
 
@@ -158,9 +210,14 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
             setTimeout(() => {
                 setStatusMessage(null);
             }, 2000);
-        } catch (error) {
+        } catch (error: any) {
             logger.error('Failed to save rule', error);
-            setStatusMessage({ type: 'error', text: 'Failed to save rule.' });
+            const isQuota = error?.message?.toLowerCase().includes('quota');
+            const msg = isQuota
+                ? 'Storage full. Try deleting unused rules to free space.'
+                : (error?.message || 'Failed to save favicon. Please try again.');
+            setStatusMessage({ type: 'error', text: msg });
+            throw error;
         } finally {
             setIsSaving(false);
         }
@@ -178,10 +235,23 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
         try {
             const response = await fetch(currentTab.favIconUrl);
             const blob = await response.blob();
+            // Derive the extension from the real content type — many sites (e.g.
+            // GitHub) serve an SVG favicon. Saving it as .png produced a file whose
+            // bytes don't match its name, which then failed to decode on re-upload.
+            const extByMime: Record<string, string> = {
+                'image/svg+xml': 'svg',
+                'image/png': 'png',
+                'image/jpeg': 'jpg',
+                'image/webp': 'webp',
+                'image/gif': 'gif',
+                'image/x-icon': 'ico',
+                'image/vnd.microsoft.icon': 'ico',
+            };
+            const ext = extByMime[blob.type.split(';')[0].trim()] || 'png';
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `favicon-${currentTab.domain}.png`;
+            a.download = `favicon-${currentTab.domain}.${ext}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -202,7 +272,10 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                 const result = await importRulesFromJson(content);
                 if (result.success) {
                     logger.info('Rules imported successfully', result);
-                    alert(`Successfully imported ${result.count} rules!`);
+                    const note = result.remoteCount > 0
+                        ? `\n\nNote: ${result.remoteCount} rule(s) use a remote image URL that will be fetched from its source whenever the rule applies.`
+                        : '';
+                    alert(`Successfully imported ${result.count} rules!${note}`);
                     refreshData();
                     if (onRuleSaved) onRuleSaved();
                 } else {
@@ -265,7 +338,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                 <header className="bg-white border-b border-slate-200 p-4 sticky top-0 z-10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <img src="icons/FaviconChangerLogo.png" alt="Logo" className="w-8 h-8 rounded-lg shadow-sm object-contain" />
-                        <h1 className="text-lg font-bold text-slate-800">Favicon Changer</h1>
+                        <h1 className="text-lg font-bold text-slate-800">Favicon Changer Ultimate</h1>
                     </div>
 
                     <div className="flex gap-1">
@@ -423,6 +496,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, initialRule,
                             isLoading={isSaving}
                             onError={(msg) => setStatusMessage({ type: 'error', text: msg })}
                             onSuccess={(msg) => msg ? setStatusMessage({ type: 'success', text: msg }) : setStatusMessage(null)}
+                            onRequestExpand={mode === 'popup' && context === 'action' && POPUP_DROPS_ON_FILE_DIALOG ? requestExpandedUpload : undefined}
                         />
 
                         <EmojiSection

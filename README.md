@@ -1,16 +1,16 @@
-# Favicon Changer
+# Favicon Changer Ultimate
 
-Customize favicons for any website with AI, Emojis, or Uploads. Make your browser tabs organized and personalized.
+Customize favicons for any website with emojis, image uploads, or badges & overlays. Make your browser tabs organized and personalized.
 
 ## Features
 
 - **🎨 Custom Uploads**: Upload any image (PNG, JPEG, SVG, WebP) to use as a favicon.
-- **⚡ Auto-Compression**: Images are automatically optimized to ensure fast loading and sync.
+- **⚡ Auto-Compression**: Images are automatically optimized to stay within storage limits.
 - **🛡️ Validation**: Smart checks prevent invalid files or URLs from breaking your experience.
-- **🏷️ Badges**: Add custom text badges to your favicons with configurable colors.
-- **🤖 AI Generation**: (Coming Soon) Generate unique icons using AI.
+- **🏷️ Badges & Overlays**: Add custom text badges or color overlays to your favicons.
 - **😀 Emoji Support**: Use any emoji as a favicon.
-- **🔄 Sync**: Rules are synced across your devices (if enabled).
+- **📂 Per-Site Rules**: Match by exact URL, whole domain, or regex; exclude sites you want left alone.
+- **🔁 Import / Export**: Back up and share your rules as JSON.
 
 ## Installation
 
@@ -30,7 +30,7 @@ Customize favicons for any website with AI, Emojis, or Uploads. Make your browse
 
 ## Privacy Policy
 
-We respect your privacy. This extension runs entirely locally on your device. No browsing data is sent to external servers. See our [Privacy Policy](PRIVACY_POLICY.md) for details.
+We respect your privacy. Favicon processing happens entirely locally on your device, and your rules and settings are stored in `chrome.storage.local` (they never leave your device). See our [Privacy Policy](PRIVACY_POLICY.md) for details.
 
 ## Development
 
@@ -41,10 +41,9 @@ We respect your privacy. This extension runs entirely locally on your device. No
 
 ## Permissions
 
--   `storage`: To save your custom rules.
--   `activeTab` & `scripting`: To change the favicon on the current tab.
--   `downloads`: To export your rules.
--   `<all_urls>`: To allow changing favicons on any website you visit.
+-   `storage`: To save your custom rules and settings.
+-   `scripting`: To inject the favicon into pages when needed.
+-   `<all_urls>` (host permission): To apply favicons on any website you visit.
 
 ## License
 

@@ -11,7 +11,7 @@ import './index.css';
 
 const OptionsApp: React.FC = () => {
     const [rules, setRules] = useState<FaviconRule[]>([]);
-    const [settings, setSettings] = useState<GlobalSettingsType>({ enableFileAccessWarning: true, excludedDomains: [] });
+    const [settings, setSettings] = useState<GlobalSettingsType>({ excludedDomains: [] });
     const [editingRule, setEditingRule] = useState<FaviconRule | null>(null);
 
     // Load data
@@ -63,7 +63,7 @@ const OptionsApp: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <img src="icons/FaviconChangerLogo.png" alt="Logo" className="w-10 h-10 rounded-lg shadow-md object-contain" />
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-800">Favicon Changer Manager</h1>
+                                <h1 className="text-2xl font-bold text-slate-800">Favicon Changer Ultimate</h1>
                                 <p className="text-slate-500">Advanced settings and rule management</p>
                             </div>
                         </div>

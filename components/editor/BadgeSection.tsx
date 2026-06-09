@@ -9,7 +9,7 @@ interface BadgeSectionProps {
     onToggle: () => void;
     sourceIconUrl: string;
     initialValues?: FaviconRule['metadata'];
-    onSave: (url: string, type: 'custom', metadata: FaviconRule['metadata']) => void;
+    onSave: (url: string, type: 'custom', metadata: FaviconRule['metadata']) => Promise<void>;
     isLoading?: boolean;
 }
 
@@ -99,18 +99,21 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
         };
     }, [isOpen, sourceIconUrl, mode, overlayColor, overlayOpacity, badgeText, badgeBgColor, badgeTextColor, badgePosition]);
 
-    const handleApply = () => {
-        if (previewUrl) {
-            const metadata: FaviconRule['metadata'] = {
-                mode,
-                overlayColor,
-                overlayOpacity,
-                badgeText,
-                badgeBgColor,
-                badgeTextColor,
-                badgePosition
-            };
-            onSave(previewUrl, 'custom', metadata);
+    const handleApply = async () => {
+        if (!previewUrl) return;
+        const metadata: FaviconRule['metadata'] = {
+            mode,
+            overlayColor,
+            overlayOpacity,
+            badgeText,
+            badgeBgColor,
+            badgeTextColor,
+            badgePosition
+        };
+        try {
+            await onSave(previewUrl, 'custom', metadata);
+        } catch (e) {
+            console.error('Badge save failed:', e);
         }
     };
 

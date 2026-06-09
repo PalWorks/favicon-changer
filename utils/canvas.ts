@@ -129,6 +129,35 @@ export const generateFavicon = async (options: GenerateFaviconOptions): Promise<
     });
 };
 
+/**
+ * Fixes a data: URL whose MIME type lies about its contents. The common case:
+ * an SVG favicon (e.g. GitHub's, served as image/svg+xml) gets downloaded with a
+ * .png extension, so re-uploading it produces `data:image/png;base64,<svg-bytes>`
+ * which the browser can't decode as PNG (-> broken image). We sniff the decoded
+ * bytes; if they're actually SVG, we relabel the URL as image/svg+xml so it loads.
+ * Returns the original URL unchanged when nothing needs fixing.
+ */
+export const normalizeImageDataUrl = (dataUrl: string): string => {
+    if (!dataUrl.startsWith('data:')) return dataUrl;
+    const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(dataUrl);
+    if (!match) return dataUrl;
+    const [, mime, base64Flag, payload] = match;
+
+    let text: string;
+    try {
+        text = base64Flag ? atob(payload).slice(0, 256) : decodeURIComponent(payload).slice(0, 256);
+    } catch {
+        return dataUrl;
+    }
+
+    // Looks like SVG markup (allowing a leading XML prolog / BOM / whitespace)?
+    const looksSvg = /^\s*(<\?xml[\s\S]*?\?>\s*)?(<!--[\s\S]*?-->\s*)?<svg[\s>]/i.test(text);
+    if (looksSvg && mime !== 'image/svg+xml') {
+        return `data:image/svg+xml${base64Flag || ''},${payload}`;
+    }
+    return dataUrl;
+};
+
 export const compressFaviconDataUrl = async (dataUrl: string, maxSizeKB = 50): Promise<string> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
