@@ -1,8 +1,6 @@
-import { FaviconRule, GlobalSettings, StorageData } from '../types';
+import { FaviconRule, GlobalSettings, StorageData, TabInfo } from '../types';
 import { IS_DEV } from '../constants';
 import { logger } from './logger';
-
-declare const chrome: any;
 
 const MOCK_STORAGE_KEY = 'favicon_flow_mock_storage';
 
@@ -194,12 +192,7 @@ export const notifyTabs = () => {
 };
 
 // --- Tab Info ---
-
-export interface TabInfo {
-  url: string;
-  domain: string;
-  favIconUrl: string;
-}
+// TabInfo lives in types.ts; this file used to declare a second, divergent copy.
 
 export const getCurrentTabInfo = async (): Promise<TabInfo> => {
   if (IS_DEV) {

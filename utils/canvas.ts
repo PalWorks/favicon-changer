@@ -1,12 +1,3 @@
-import { Shape } from '../types';
-
-interface GenerateFaviconOptions {
-    sourceUrl: string;
-    color: string;
-    shape: Shape;
-    text: string;
-}
-
 export type BadgePosition = 'top' | 'bottom';
 
 export const drawOverlay = (
@@ -75,58 +66,6 @@ export const drawBadge = (
     ctx.fillStyle = textColor;
     ctx.fillText(text, x, y + (fontSize * 0.05)); // Slight vertical adjustment
     ctx.restore();
-};
-
-export const generateFavicon = async (options: GenerateFaviconOptions): Promise<string> => {
-    const { sourceUrl, color, shape, text } = options;
-
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                const SIZE = 128;
-                canvas.width = SIZE;
-                canvas.height = SIZE;
-                const ctx = canvas.getContext('2d');
-
-                if (!ctx) {
-                    reject(new Error('Could not get canvas context'));
-                    return;
-                }
-
-                // Draw original favicon
-                ctx.drawImage(img, 0, 0, SIZE, SIZE);
-
-                // Draw Badge if text is present
-                if (text) {
-                    drawBadge(
-                        ctx,
-                        SIZE,
-                        SIZE,
-                        text,
-                        color || '#FF0000', // Default red if no color provided
-                        '#FFFFFF',          // White text
-                        'bottom'            // Default position
-                    );
-                }
-
-                const dataUrl = canvas.toDataURL('image/png');
-                resolve(dataUrl);
-
-            } catch (error) {
-                reject(error);
-            }
-        };
-
-        img.onerror = () => {
-            reject(new Error('Failed to load source favicon image'));
-        };
-
-        img.src = sourceUrl;
-    });
 };
 
 /**

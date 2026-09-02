@@ -1,4 +1,3 @@
-import { TabInfo } from '../types';
 import { logger } from './logger';
 
 /**

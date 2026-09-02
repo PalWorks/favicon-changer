@@ -1,5 +1,4 @@
 export type MatchType = 'domain' | 'exact_url' | 'regex';
-export type Shape = 'circle' | 'square' | 'banner' | 'border';
 
 export interface FaviconRule {
   id: string;          // Unique ID (UUID)
