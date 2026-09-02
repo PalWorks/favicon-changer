@@ -10,6 +10,86 @@ Effort key: **S** ≤ half a day · **M** 1 to 3 days · **L** ≥ 1 week.
 
 ---
 
+## Status at a glance
+
+Every item in this document, with its state. `R-xx` ids are stable and never reused, so a
+finding keeps its number for life. Detail for each is further down; defects are described in
+[docs/LIMITATIONS.md](docs/LIMITATIONS.md) as `L-xx`.
+
+Legend: **done** shipped and verified · **next** the current work queue, in order ·
+**pending** agreed but not started · **standing** a decision already taken, no action unless it
+changes.
+
+### Done (2026-09-02)
+
+| ID | Item | Effort | Outcome |
+|---|---|---|---|
+| R-00 | React type definitions | S | Types installed; `Button` gained the missing `size` prop 11 call sites already passed. `tsc` clean and meaningful |
+| R-13 | Automated checks | S | `pre-push` hook: typecheck + tests + build in ~9 s. No Actions workflow, by decision (ADR-012) |
+| R-03 | Regex rule corruption on edit | S | Editing a regex rule no longer downgrades and duplicates it |
+| R-04 | Most specific match wins | M | Scoring replaces first-match-per-tier. 8 new tests |
+| R-05 | Fallback field keystroke storm | S | Commits on blur. 20 chars: 0 writes, was 20 writes + 20 tab broadcasts |
+| R-06 | Badge tool silent no-op | S | Explains an unbadgeable page, disables Apply, logs through `logger` |
+| R-08 | Content script double-init | S | `window.__fcuContentLoaded` latch |
+| R-10 | Duplicated OS detection | S | One `popupClosesOnFileDialog()` helper |
+| R-11 | Inert conflict button | S | Acts, or opens Settings when the rule is a regex |
+| R-18 | Verified dead code | S | Removed. `isValidBadgeText` held back for R-07 |
+| R-19 | `chrome: any` shim | S | Removed from both files; `@types/chrome` now enforced |
+| R-26 | `createdAt` overwritten | S | Preserved; `updatedAt` added |
+| R-29 | Build config scar | S | Unused `loadEnv` and empty `define` gone |
+
+Table name: **roadmap-done**
+
+### Next up
+
+| ID | Item | Effort | Status | Why now |
+|---|---|---|---|---|
+| R-01 | `prefix` match type | M | **next** | The Chrome Web Store review asked for it. Safe, anchored, paste-a-URL matching |
+| R-02 | Regex in the editor UI | S | **next** | Engine already supports it and is tested; only the UI is missing |
+| R-07 | Harden rules import | S | **next** | Must land with the new match types, before either reaches users |
+| R-12 | Icon and store-asset sizes | S | **next** | Needed for the listing update that ships v1.4.0 |
+
+Table name: **roadmap-next**
+
+### Pending
+
+| ID | Item | Tier | Effort | Note |
+|---|---|---|---|---|
+| R-35 | Conflict detector misses same-tier shadowing | 2 | S | Opened up by R-04's scoring |
+| R-25 | Global fallback applies to every unmatched page | 2 | S | Copy says "if a site has no favicon"; it does not mean that |
+| R-09 | `notifyTabs` fans out to every tab | 2 | M | One save pings every open tab, discarded ones included |
+| R-20 | Log-write races | 2 | S | Read-modify-write per line loses entries when it matters most |
+| R-14 | Test gaps | 3 | M | `validation`, the migration latch, `normalizeImageDataUrl`, `isRestrictedUrl`, a jsdom lock on ADR-001 |
+| R-15 | Extract the editor's logic into a hook | 3 | M | ~520 lines and a `mode` × `context` matrix; R-01/R-02 add more |
+| R-16 | Dependency hygiene | 3 | S | `npm audit` in the hook, Dependabot |
+| R-27 | Storage-usage meter | 4 | S | "Storage full" currently arrives with no warning |
+| R-33 | Per-rule enable/disable | 4 | S | Today you must delete a rule to test whether it is the culprit |
+| R-32 | Rules list does not scale | 4 | M | No search, sort, filter or bulk delete |
+| R-30 | Accessibility pass | 4 | S | Icon-only buttons lack `aria-label`; the logging switch lacks a label |
+| R-21 | Emoji rendered at 64px | 4 | S | Everything else is 128px |
+| R-28 | 231 KB logo for a 32px render | 4 | S | About 40% of the package |
+| R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
+| R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
+| R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
+| R-17 | Security contact | 5 | S | No inbound vulnerability channel |
+
+Table name: **roadmap-pending**
+
+### Standing decisions
+
+| ID | Item | Decision |
+|---|---|---|
+| R-34 | Options-page Google favicon lookup | Kept and disclosed (ADR-011). Revisit only if the zero-third-party claim outweighs the preview |
+| n/a | Analytics of any kind | Never. It is the product's differentiation |
+| n/a | `www` normalisation in domain matching | No. Silent host rewriting is worse than a documented asymmetry |
+| n/a | `updateFavicon` as remove-and-append | No. Breaks background tabs (ADR-001) |
+| n/a | Unconditional `<head>` reconciliation | No. Broke SPAs (ADR-002) |
+| n/a | A build-time `define` holding a secret | No. A published extension cannot keep a secret |
+
+Table name: **roadmap-standing**
+
+---
+
 ## Where the product stands
 
 | Signal | Value |
@@ -25,26 +105,6 @@ Effort key: **S** ≤ half a day · **M** 1 to 3 days · **L** ≥ 1 week.
 | CI | none |
 
 Table name: **product-snapshot**
-
-### Completed
-
-| Item | Done | Result |
-|---|---|---|
-| R-00 | 2026-09-02 | React types installed; `Button` gained the missing `size` prop that 11 call sites already passed. `tsc --noEmit` now clean and meaningful |
-| R-13 | 2026-09-02 | Local `pre-push` hook running typecheck + tests + build in ~9 s. No GitHub Actions workflow, by decision (ADR-012) |
-| R-04 | 2026-09-02 | Matching scores every candidate: most specific wins, not the oldest. 8 new tests, 28 total |
-| R-03 | 2026-09-02 | Editing a regex rule no longer downgrades and duplicates it. Verified end to end |
-| R-11 | 2026-09-02 | The conflict banner's button now acts, or sends you to Settings when it cannot |
-| R-05 | 2026-09-02 | Fallback favicon commits on blur, not per keystroke. 20 chars now cost 0 writes, was 20 writes plus 20 tab broadcasts |
-| R-06 | 2026-09-02 | Badge tool explains an unbadgeable page and disables Apply instead of failing silently |
-| R-08 | 2026-09-02 | `window.__fcuContentLoaded` latch stops a second injected copy double-registering |
-| R-10 | 2026-09-02 | One `popupClosesOnFileDialog()` helper replaces the getPlatformInfo/user-agent split |
-| R-18 | 2026-09-02 | Verified dead code removed. `isValidBadgeText` kept back for R-07 to wire up |
-| R-19 | 2026-09-02 | `declare const chrome: any` gone from both files; @types/chrome now genuinely enforced |
-| R-26 | 2026-09-02 | `createdAt` preserved, `updatedAt` added, list shows both |
-| R-29 | 2026-09-02 | Unused `loadEnv` and the empty `define` block gone from `vite.config.ts` |
-
-Table name: **completed-items**
 
 **Remaining in Tier 1 for v1.4.0**: R-01 (prefix matching), R-02 (regex UI), R-07 (import
 hardening), R-12 (icon and store-asset dimensions).
