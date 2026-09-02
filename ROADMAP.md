@@ -37,6 +37,9 @@ changes.
 | R-19 | `chrome: any` shim | S | Removed from both files; `@types/chrome` now enforced |
 | R-26 | `createdAt` overwritten | S | Preserved; `updatedAt` added |
 | R-29 | Build config scar | S | Unused `loadEnv` and empty `define` gone |
+| R-01 | `prefix` match type | M | "URL Starts With", ranked above regex (ADR-013). Prefilled from the current page; verified covering one Sheets document across its sheets |
+| R-02 | Regex in the editor UI | S | Fourth scope option, not hidden behind an Advanced toggle. Live validation, escaped and anchored prefill, live open-tab match count |
+| R-07 | Harden rules import | S | Every rule rebuilt field by field in `utils/importRules.ts`; 31 tests. Rejects reported per rule with a reason |
 
 Table name: **roadmap-done**
 
@@ -44,18 +47,18 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-01 | `prefix` match type | M | **next** | The Chrome Web Store review asked for it. Safe, anchored, paste-a-URL matching |
-| R-02 | Regex in the editor UI | S | **next** | Engine already supports it and is tested; only the UI is missing |
-| R-07 | Harden rules import | S | **next** | Must land with the new match types, before either reaches users |
-| R-12 | Icon and store-asset sizes | S | **next** | Needed for the listing update that ships v1.4.0 |
+| R-12 | Icon and store-asset sizes | S | **next** | The last thing between the code and a v1.4.0 listing update |
+| R-35 | Conflict detector, same-tier shadowing | S | **pending** | Partly done: the detector now spans all tiers, but same-tier is still uncovered |
 
 Table name: **roadmap-next**
+
+**v1.4.0 is code-complete apart from R-12.** What it contains: prefix matching, a regex UI,
+specificity-based precedence, hardened import, and the Tier 2 bug batch.
 
 ### Pending
 
 | ID | Item | Tier | Effort | Note |
 |---|---|---|---|---|
-| R-35 | Conflict detector misses same-tier shadowing | 2 | S | Opened up by R-04's scoring |
 | R-25 | Global fallback applies to every unmatched page | 2 | S | Copy says "if a site has no favicon"; it does not mean that |
 | R-09 | `notifyTabs` fans out to every tab | 2 | M | One save pings every open tab, discarded ones included |
 | R-20 | Log-write races | 2 | S | Read-modify-write per line loses entries when it matters most |
@@ -183,7 +186,7 @@ size can actually override them. Verified on the options page: the four small bu
 The customer request plus the two defects that stand in its way. Ship these together; they touch
 the same code and are individually incoherent.
 
-### R-01 · Add `prefix` match type · **M**
+### R-01 · Add `prefix` match type · **M** · ✅ done 2026-09-02
 `matchType: 'prefix'` where `currentUrl.startsWith(matcher)`. Directly answers the review.
 
 - `types.ts`: extend `MatchType`. Additive, existing rules are untouched, no migration needed.
@@ -197,7 +200,18 @@ the same code and are individually incoherent.
 - **Acceptance**: one rule survives navigating between sheets of the same document, and does not
   leak to a different document.
 
-### R-02 · Expose `regex` in the editor · **S**
+**Outcome.** Shipped as the "URL Starts With" scope, ranked above regex. The question of whether
+it is redundant given regex is answered in [docs/DECISIONS.md](docs/DECISIONS.md) ADR-013: it is
+a strict subset functionally, and worth keeping anyway because a pasted URL is a broken regex,
+regex here is unanchored, matcher length is a meaningful specificity signal for prefixes but not
+for patterns, and `startsWith` has no ReDoS surface. Wildcards were deliberately not added;
+prefix covers the leading-wildcard case and regex covers the rest.
+
+Verified in the browser with the review's own case: typing the Sheets URL and picking the scope
+prefills `https://docs.google.com/spreadsheets/d/ABC123` and reports "Matches 2 of your 4 open
+tabs", being the two sheets of that document and not the other document on the same site.
+
+### R-02 · Expose `regex` in the editor · **S** · ✅ done 2026-09-02
 The engine is done ([utils/matcher.ts:11](utils/matcher.ts#L11)); only the UI is missing (L-02).
 
 - Widen the `applyScope` union at [FaviconEditor.tsx:38](components/FaviconEditor.tsx#L38) to the
@@ -208,6 +222,14 @@ The engine is done ([utils/matcher.ts:11](utils/matcher.ts#L11)); only the UI is
 - Validate live with the existing `isValidRegex()` and show the error inline; show which of the
   open tabs the pattern would match as a confidence check.
 - **Acceptance**: a regex rule can be created, edited and deleted without touching a JSON file.
+
+**Outcome.** Built as a fourth scope option rather than hidden behind an Advanced disclosure, on
+the grounds that the audience is a Developer Tools extension. The scope control is a 2x2 grid so
+labels stay readable in the 400px popup. The pattern field validates live (an invalid regex is
+named as such and the preview is suppressed), prefills an escaped and anchored pattern from the
+current page, and reports how many open tabs it matches, with the matching tab titles listed.
+The prefix field additionally rejects a pattern that does not start at the beginning of an
+address, which is the mistake that would otherwise silently match nothing.
 
 ### R-03 · Fix regex-rule corruption on edit · **S** · ✅ done 2026-09-02
 Loading a regex rule into the options editor converts it to `exact_url` and saves a duplicate
@@ -235,12 +257,21 @@ function, fully unit-testable.
 **Acceptance**: new tests for every tier pair and for two same-tier rules of different
 specificity; all 20 existing tests still pass unchanged.
 
-### R-07 · Harden rules import · **S** · ships with new match types
+### R-07 · Harden rules import · **S** · ✅ done 2026-09-02
 `importRulesFromJson` ([storage.ts:154](utils/storage.ts#L154)) checks only that `id`, `matcher`
 and `faviconUrl` are present. Before a new `matchType` exists in the wild, add: `matchType` in the
 allowed set, `faviconUrl` scheme in `{data:image/*, https:, http:}`, a rule-count cap, a
 per-icon size cap, and `isValidRegex()` for regex rules. Rejects should be reported per-rule, not
 as a silent drop. Covers threats 1 to 3 in [docs/SECURITY.md](docs/SECURITY.md).
+
+**Outcome.** Validation moved into a pure `utils/importRules.ts`, so the whole decision about
+what may enter storage sits in one testable place (31 tests). Every rule is rebuilt field by
+field rather than spread, so unknown top-level keys and unknown metadata keys never reach
+storage. Enforced: known `matchType`, compiling regex, allow-listed icon scheme (inline images
+or http(s) only, which rejects `javascript:`, `data:text/html` and `file:`), a 256KB icon cap, a
+500 rule file cap, and the 3 character badge limit that previously existed only as an input
+attribute. This is where `isValidBadgeText` finally gets wired up, as R-18 promised. Failures are
+reported per rule with a reason instead of being dropped silently.
 
 ### R-12 · Fix icon and store-asset dimensions · **S**
 `icons/128.png` is 127×128 (L-25). Promo tiles are 1200×896 and 1632×656 against documented

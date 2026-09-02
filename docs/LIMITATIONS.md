@@ -9,19 +9,17 @@ its roadmap item. If you hit one of these, it is already known. Do not rediscove
 
 ## 1. Matching
 
-### L-01 · `exact_url` is byte-exact, and there is no prefix or wildcard match → **R-01**
-A rule scoped **This Page Only** matches only that literal URL. `?query`, `#hash` and a trailing
-slash all break it. Any site whose URL carries a document id plus mutable path segments
-(Google Sheets, Notion, Jira, GitHub file views) therefore needs one rule per URL variant.
-This is the top user-reported gap. **Workaround**: scope to **Entire Domain**, accepting that it
-covers the whole site.
+### L-01 · No prefix or wildcard match · *resolved 2026-09-02, R-01 done*
+**Fixed** by the `prefix` match type ("URL Starts With"), which covers one document across all
+its views. `exact_url` is still byte-exact by design, including `?query` and `#hash`; that is
+what prefix exists to sit beside. Note wildcards (`*`) were **not** added: prefix covers the
+leading-wildcard case and regex covers the rest. See [DECISIONS.md](DECISIONS.md) ADR-013.
 
-### L-02 · `regex` rules cannot be created in the UI → **R-02**
-The engine fully supports `matchType: 'regex'` ([utils/matcher.ts:11](../utils/matcher.ts#L11)),
-the rules list renders a purple `regex` badge for it, and it is unit-tested, but the editor's
-scope control is typed `'domain' | 'exact_url'`
-([FaviconEditor.tsx:38](../components/FaviconEditor.tsx#L38)), so nothing can produce one. Regex
-rules can only enter storage by hand-editing an exported JSON file and re-importing it.
+### L-02 · `regex` rules could not be created in the UI · *resolved 2026-09-02, R-02 done*
+**Fixed.** The editor's scope control now covers all four match types, with a pattern field,
+live validation, a prefilled suggestion, and a count of how many open tabs the pattern matches.
+The engine had supported regex from the start; only the UI was missing, so a user asked for a
+feature that was already 90% built.
 
 ### L-03 · Editing a regex rule converted it to `exact_url` and duplicated it · *resolved 2026-09-02, R-03 done*
 Loading a rule into the options editor coerces the scope

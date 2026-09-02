@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { findBestRule, findConflictingRule } from './matcher';
+import { findBestRule, findConflictingRule, patternMatches } from './matcher';
 import { FaviconRule } from '../types';
 
 // logger uses chrome.storage — stub it out so tests run in Node.
@@ -22,6 +22,11 @@ const GOOGLE_URL    = 'https://www.google.com/search?q=test';
 const GOOGLE_DOMAIN = 'www.google.com';
 const GA4_URL       = 'https://analytics.google.com/analytics/web/';
 const GA4_DOMAIN    = 'analytics.google.com';
+const SHEET_URL     = 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0';
+const SHEET_URL_2   = 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=99';
+const OTHER_SHEET   = 'https://docs.google.com/spreadsheets/d/ZZZ999/edit#gid=0';
+const SHEET_DOMAIN  = 'docs.google.com';
+const SHEET_PREFIX  = 'https://docs.google.com/spreadsheets/d/ABC123';
 
 // ---------------------------------------------------------------------------
 // findBestRule
@@ -111,6 +116,95 @@ describe('findBestRule', () => {
     const r1 = rule({ matchType: 'domain', matcher: 'google.com', faviconUrl: 'first.png' });
     const r2 = rule({ matchType: 'domain', matcher: 'google.com', faviconUrl: 'second.png' });
     expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [r1, r2])?.faviconUrl).toBe('first.png');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findBestRule: prefix match type (R-01)
+//
+// The case from the Chrome Web Store review: one favicon that stays applied to
+// one Google Sheets document while the tail of the URL changes between sheets.
+// ---------------------------------------------------------------------------
+
+describe('findBestRule prefix', () => {
+  it('holds across URL variations under the same document', () => {
+    const r = rule({ matchType: 'prefix', matcher: SHEET_PREFIX });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [r])).toBe(r);
+    expect(findBestRule(SHEET_URL_2, SHEET_DOMAIN, [r])).toBe(r);
+  });
+
+  it('does not leak to a different document on the same site', () => {
+    const r = rule({ matchType: 'prefix', matcher: SHEET_PREFIX });
+    expect(findBestRule(OTHER_SHEET, SHEET_DOMAIN, [r])).toBeNull();
+  });
+
+  it('anchors at the start, so it is not substring matching', () => {
+    const r = rule({ matchType: 'prefix', matcher: 'https://docs.google.com/a' });
+    expect(findBestRule('https://evil.example/?x=https://docs.google.com/a', 'evil.example', [r])).toBeNull();
+  });
+
+  it('never matches on an empty matcher', () => {
+    // Otherwise an empty prefix would match every URL on the web.
+    const r = rule({ matchType: 'prefix', matcher: '' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [r])).toBeNull();
+  });
+
+  it('beats a domain rule for the same site', () => {
+    const prefix = rule({ matchType: 'prefix', matcher: SHEET_PREFIX,   faviconUrl: 'prefix.png' });
+    const domain = rule({ matchType: 'domain', matcher: 'google.com',   faviconUrl: 'domain.png' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [domain, prefix])?.faviconUrl).toBe('prefix.png');
+  });
+
+  it('beats a regex rule, so a document rule cannot lose to a site-wide pattern', () => {
+    // The deliberate ordering decision in ADR-013.
+    const prefix = rule({ matchType: 'prefix', matcher: SHEET_PREFIX,          faviconUrl: 'prefix.png' });
+    const regex  = rule({ matchType: 'regex',  matcher: 'docs\\.google\\.com', faviconUrl: 'regex.png' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [regex, prefix])?.faviconUrl).toBe('prefix.png');
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [prefix, regex])?.faviconUrl).toBe('prefix.png');
+  });
+
+  it('loses to an exact URL rule for the same page', () => {
+    const prefix = rule({ matchType: 'prefix',    matcher: SHEET_PREFIX, faviconUrl: 'prefix.png' });
+    const exact  = rule({ matchType: 'exact_url', matcher: SHEET_URL,    faviconUrl: 'exact.png' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [prefix, exact])?.faviconUrl).toBe('exact.png');
+  });
+
+  it('prefers the longer prefix regardless of rule order', () => {
+    const broad    = rule({ matchType: 'prefix', matcher: 'https://docs.google.com/spreadsheets', faviconUrl: 'broad.png' });
+    const specific = rule({ matchType: 'prefix', matcher: SHEET_PREFIX,                           faviconUrl: 'specific.png' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [broad, specific])?.faviconUrl).toBe('specific.png');
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [specific, broad])?.faviconUrl).toBe('specific.png');
+  });
+
+  it('a very long prefix never outranks an exact_url rule', () => {
+    const longPrefix = rule({ matchType: 'prefix',    matcher: 'https://docs.google.com/' + 'a'.repeat(400), faviconUrl: 'prefix.png' });
+    const exact      = rule({ matchType: 'exact_url', matcher: SHEET_URL, faviconUrl: 'exact.png' });
+    expect(findBestRule(SHEET_URL, SHEET_DOMAIN, [longPrefix, exact])?.faviconUrl).toBe('exact.png');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// patternMatches: the editor's live preview helper
+// ---------------------------------------------------------------------------
+
+describe('patternMatches', () => {
+  it('agrees with each match type', () => {
+    expect(patternMatches('exact_url', SHEET_URL, SHEET_URL, SHEET_DOMAIN)).toBe(true);
+    expect(patternMatches('exact_url', SHEET_URL, SHEET_URL_2, SHEET_DOMAIN)).toBe(false);
+    expect(patternMatches('prefix', SHEET_PREFIX, SHEET_URL_2, SHEET_DOMAIN)).toBe(true);
+    expect(patternMatches('prefix', SHEET_PREFIX, OTHER_SHEET, SHEET_DOMAIN)).toBe(false);
+    expect(patternMatches('regex', 'spreadsheets/d/ABC', SHEET_URL, SHEET_DOMAIN)).toBe(true);
+    expect(patternMatches('domain', 'google.com', SHEET_URL, SHEET_DOMAIN)).toBe(true);
+    expect(patternMatches('domain', 'bing.com', SHEET_URL, SHEET_DOMAIN)).toBe(false);
+  });
+
+  it('reports false for an invalid regex rather than throwing', () => {
+    expect(patternMatches('regex', '[invalid(', SHEET_URL, SHEET_DOMAIN)).toBe(false);
+  });
+
+  it('reports false for an empty pattern', () => {
+    expect(patternMatches('prefix', '', SHEET_URL, SHEET_DOMAIN)).toBe(false);
+    expect(patternMatches('regex', '', SHEET_URL, SHEET_DOMAIN)).toBe(false);
   });
 });
 
@@ -213,5 +307,31 @@ describe('findConflictingRule', () => {
   it('returns null when regex does not match the target URL', () => {
     const r = rule({ matchType: 'regex', matcher: 'bing\\.com' });
     expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBeNull();
+  });
+
+  it('reports a prefix rule shadowing a domain-scoped edit', () => {
+    const r = rule({ matchType: 'prefix', matcher: SHEET_PREFIX });
+    expect(findConflictingRule(SHEET_URL, 'domain', [r], SHEET_DOMAIN)).toBe(r);
+  });
+
+  it('reports the highest-ranked shadowing rule when several apply', () => {
+    const prefix = rule({ matchType: 'prefix',    matcher: SHEET_PREFIX, faviconUrl: 'prefix.png' });
+    const exact  = rule({ matchType: 'exact_url', matcher: SHEET_URL,    faviconUrl: 'exact.png' });
+    expect(findConflictingRule(SHEET_URL, 'domain', [prefix, exact], SHEET_DOMAIN)?.faviconUrl).toBe('exact.png');
+  });
+
+  it('does not report a lower or equal tier as a conflict', () => {
+    // A domain rule cannot shadow a prefix edit, and same-tier shadowing is
+    // deliberately out of scope here (ROADMAP R-35).
+    const domain = rule({ matchType: 'domain', matcher: 'google.com' });
+    expect(findConflictingRule(SHEET_URL, 'prefix', [domain], SHEET_DOMAIN)).toBeNull();
+
+    const otherPrefix = rule({ matchType: 'prefix', matcher: 'https://docs.google.com' });
+    expect(findConflictingRule(SHEET_URL, 'prefix', [otherPrefix], SHEET_DOMAIN)).toBeNull();
+  });
+
+  it('returns null when editing a regex rule and only a domain rule exists', () => {
+    const domain = rule({ matchType: 'domain', matcher: 'google.com' });
+    expect(findConflictingRule(GOOGLE_URL, 'regex', [domain], GOOGLE_DOMAIN)).toBeNull();
   });
 });

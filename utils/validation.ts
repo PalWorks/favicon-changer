@@ -42,3 +42,45 @@ export const isValidFileSize = (file: File, maxBytes = 5 * 1024 * 1024): boolean
     // Default max size 5MB (before compression)
     return file.size <= maxBytes;
 };
+
+// --- Limits for data arriving from outside the UI (a rules JSON import) ---
+
+// A generous ceiling that still stops a single file from filling
+// chrome.storage.local, which has a fixed quota shared with the user's icons.
+export const MAX_IMPORT_RULES = 500;
+
+// Icons the editor produces are a 128px PNG, tens of KB at most. This leaves
+// plenty of headroom while rejecting a file that would blow the quota.
+export const MAX_ICON_BYTES = 256 * 1024;
+
+/**
+ * Whether a favicon URL is one we are willing to store and later hand to a
+ * <link href>. Imported files can come from anywhere, so the scheme is
+ * allow-listed rather than checked for known-bad values: inline images, or a
+ * plain http(s) address the user can see in the rules list.
+ */
+export const isAllowedFaviconUrl = (url: string): boolean => {
+    if (typeof url !== 'string' || !url) return false;
+
+    if (url.startsWith('data:')) {
+        // Only actual images. Notably excludes data:text/html and data:image/svg+xml
+        // is allowed because the editor itself produces SVG data URLs on repair.
+        return /^data:image\/[a-z0-9.+-]+[;,]/i.test(url);
+    }
+
+    try {
+        const protocol = new URL(url).protocol;
+        return protocol === 'https:' || protocol === 'http:';
+    } catch (e) {
+        return false;
+    }
+};
+
+/** Approximate decoded size of a data URL, or the string length otherwise. */
+export const approximateUrlBytes = (url: string): number => {
+    const base64 = url.indexOf(';base64,');
+    if (url.startsWith('data:') && base64 !== -1) {
+        return Math.floor((url.length - base64 - 8) * 0.75);
+    }
+    return url.length;
+};

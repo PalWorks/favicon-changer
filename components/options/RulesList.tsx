@@ -2,6 +2,22 @@ import React from 'react';
 import { FaviconRule } from '../../types';
 import { FaviconPreview } from '../FaviconPreview';
 
+// One colour and label per match type. Anything unrecognised falls back to a
+// neutral chip rather than being mislabelled, since storage can be hand-edited.
+const BADGE_STYLES: Record<string, string> = {
+    domain: 'bg-blue-100 text-blue-700',
+    prefix: 'bg-amber-100 text-amber-700',
+    exact_url: 'bg-green-100 text-green-700',
+    regex: 'bg-purple-100 text-purple-700',
+};
+
+const BADGE_LABELS: Record<string, string> = {
+    domain: 'Domain',
+    prefix: 'Starts with',
+    exact_url: 'Exact',
+    regex: 'Regex',
+};
+
 interface RulesListProps {
     rules: FaviconRule[];
     editingRuleId?: string;
@@ -34,11 +50,8 @@ export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEd
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide
-                                ${rule.matchType === 'domain' ? 'bg-blue-100 text-blue-700' :
-                                            rule.matchType === 'exact_url' ? 'bg-green-100 text-green-700' :
-                                                'bg-purple-100 text-purple-700'}`}>
-                                        {rule.matchType === 'exact_url' ? 'Exact' : rule.matchType}
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide shrink-0 ${BADGE_STYLES[rule.matchType] || 'bg-slate-100 text-slate-600'}`}>
+                                        {BADGE_LABELS[rule.matchType] || rule.matchType}
                                     </span>
                                     <p className="font-mono text-sm text-slate-700 truncate">{rule.matcher}</p>
                                 </div>

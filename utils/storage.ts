@@ -1,4 +1,5 @@
-import { FaviconRule, GlobalSettings, StorageData, TabInfo } from '../types';
+import { FaviconRule, GlobalSettings, MatchType, StorageData, TabInfo } from '../types';
+import { validateImportedRules, RejectedRule } from './importRules';
 import { IS_DEV } from '../constants';
 import { logger } from './logger';
 
@@ -126,6 +127,18 @@ const persistData = async (data: StorageData): Promise<void> => {
 
 // --- Import / Export Utilities ---
 
+export interface ImportReport {
+  success: boolean;
+  /** Rules written to storage. */
+  count: number;
+  /** Of those, how many fetch their icon from a remote address on every apply. */
+  remoteCount: number;
+  /** Individual rules that failed validation, with the reason for each. */
+  rejected: RejectedRule[];
+  /** Set when the file as a whole was unusable. */
+  fatal?: string;
+}
+
 export const exportRulesAsJson = async () => {
   const { rules } = await getStorageData();
   // Export just the rules map
@@ -138,39 +151,55 @@ export const exportRulesAsJson = async () => {
   downloadAnchorNode.remove();
 };
 
-export const importRulesFromJson = async (jsonString: string): Promise<{ success: boolean; count: number; remoteCount: number }> => {
+export const importRulesFromJson = async (jsonString: string): Promise<ImportReport> => {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(jsonString);
-    if (typeof parsed !== 'object' || parsed === null) return { success: false, count: 0, remoteCount: 0 };
-
-    // Validate items
-    let validCount = 0;
-    let remoteCount = 0; // rules whose favicon is a remote URL (fetched on apply)
-    const validatedRules: Record<string, FaviconRule> = {};
-
-    Object.values(parsed).forEach((item: any) => {
-      if (item.id && item.matcher && item.faviconUrl) {
-        validatedRules[item.id] = item;
-        validCount++;
-        // A non-data: favicon is fetched from its origin every time the rule
-        // applies — worth flagging since an imported file could point anywhere.
-        if (!String(item.faviconUrl).startsWith('data:')) remoteCount++;
-      }
-    });
-
-    if (validCount === 0) return { success: false, count: 0, remoteCount: 0 };
-
-    const { rules: currentRules, settings } = await getStorageData();
-    const mergedRules = { ...currentRules, ...validatedRules };
-
-    await persistData({ rules: mergedRules, settings });
-    notifyTabs();
-
-    return { success: true, count: validCount, remoteCount };
+    parsed = JSON.parse(jsonString);
   } catch (e) {
-    logger.error("Import failed", e);
-    return { success: false, count: 0, remoteCount: 0 };
+    logger.error('Import failed: not valid JSON', e);
+    return { success: false, count: 0, remoteCount: 0, rejected: [], fatal: 'That file is not valid JSON.' };
   }
+
+  // All the "is this allowed" logic lives in utils/importRules.ts, pure and
+  // unit tested. This function only persists what came back.
+  const outcome = validateImportedRules(parsed);
+
+  if (outcome.fatal) {
+    logger.warn('Import rejected', { fatal: outcome.fatal });
+    return { success: false, count: 0, remoteCount: 0, rejected: outcome.rejected, fatal: outcome.fatal };
+  }
+
+  const count = Object.keys(outcome.accepted).length;
+  if (count === 0) {
+    logger.warn('Import rejected: no valid rules', { rejected: outcome.rejected.length });
+    return {
+      success: false,
+      count: 0,
+      remoteCount: 0,
+      rejected: outcome.rejected,
+      fatal: 'No rules in that file could be read.',
+    };
+  }
+
+  try {
+    const { rules: currentRules, settings } = await getStorageData();
+    await persistData({ rules: { ...currentRules, ...outcome.accepted }, settings });
+  } catch (e: any) {
+    logger.error('Import failed to persist', e);
+    const isQuota = e?.message?.toLowerCase().includes('quota');
+    return {
+      success: false,
+      count: 0,
+      remoteCount: 0,
+      rejected: outcome.rejected,
+      fatal: isQuota ? 'Not enough storage space. Delete some rules and try again.' : 'Could not save the imported rules.',
+    };
+  }
+
+  notifyTabs();
+  logger.info('Rules imported', { count, rejected: outcome.rejected.length, remoteCount: outcome.remoteCount });
+
+  return { success: true, count, remoteCount: outcome.remoteCount, rejected: outcome.rejected };
 };
 
 import { sendMessageToTab, isRestrictedUrl } from './messaging';
@@ -242,6 +271,58 @@ export const getCurrentTabInfo = async (): Promise<TabInfo> => {
   });
 };
 
+// --- Open tabs, for the editor's live pattern preview ---
+
+export interface OpenTab {
+  title: string;
+  url: string;
+  hostname: string;
+}
+
+/**
+ * The user's open tabs, for showing which ones a prefix or regex pattern would
+ * cover before the rule is saved. Restricted URLs are dropped since a rule
+ * could never apply there anyway.
+ */
+export const getOpenTabs = async (): Promise<OpenTab[]> => {
+  if (IS_DEV) {
+    // Dev mode has no chrome.tabs. These stand in so the pattern preview can be
+    // exercised against `npm run dev`.
+    return [
+      { title: 'Q3 Budget - Google Sheets', url: 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0', hostname: 'docs.google.com' },
+      { title: 'Q3 Budget - Google Sheets', url: 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=41', hostname: 'docs.google.com' },
+      { title: 'Roadmap - Google Sheets', url: 'https://docs.google.com/spreadsheets/d/ZZZ999/edit', hostname: 'docs.google.com' },
+      { title: 'Example', url: 'https://example.com/page', hostname: 'example.com' },
+    ];
+  }
+
+  return new Promise((resolve) => {
+    if (!chrome.tabs || !chrome.tabs.query) {
+      resolve([]);
+      return;
+    }
+    chrome.tabs.query({}, (tabs: any[]) => {
+      if (chrome.runtime.lastError) {
+        logger.warn('[Storage] tabs.query failed:', chrome.runtime.lastError.message);
+        resolve([]);
+        return;
+      }
+      const out: OpenTab[] = [];
+      (tabs || []).forEach(tab => {
+        if (!tab.url || isRestrictedUrl(tab.url)) return;
+        let hostname = '';
+        try {
+          hostname = new URL(tab.url).hostname;
+        } catch (e) {
+          return;
+        }
+        out.push({ title: tab.title || hostname, url: tab.url, hostname });
+      });
+      resolve(out);
+    });
+  });
+};
+
 // --- Editor handoff (popup -> standalone window) ---
 //
 // The toolbar action popup auto-closes the instant it loses focus. On Linux
@@ -257,7 +338,10 @@ export interface PendingEditorTarget {
   url: string;
   domain: string;
   favIconUrl: string;
-  scope: 'domain' | 'exact_url';
+  scope: MatchType;
+  // The pattern, for the prefix and regex scopes whose matcher is not derived
+  // from the target page. Without this, handing off mid-edit would lose it.
+  matcher?: string;
   // Optional: when the window is opened from the toolbar icon (not a Browse
   // handoff) no section is pre-opened, mirroring the collapsed bubble.
   section?: 'upload' | 'emoji' | 'badge';

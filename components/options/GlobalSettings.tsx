@@ -3,6 +3,7 @@ import { GlobalSettings as GlobalSettingsType } from '../../types';
 import { FaviconPreview } from '../FaviconPreview';
 import { Button } from '../Button';
 import { exportRulesAsJson, importRulesFromJson } from '../../utils/storage';
+import { describeImport } from '../../utils/importRules';
 
 interface GlobalSettingsProps {
     settings: GlobalSettingsType;
@@ -25,16 +26,9 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
         const reader = new FileReader();
         reader.onload = async (ev) => {
             const content = ev.target?.result as string;
-            const result = await importRulesFromJson(content);
-            if (result.success) {
-                const note = result.remoteCount > 0
-                    ? `\n\nNote: ${result.remoteCount} rule(s) use a remote image URL that will be fetched from its source whenever the rule applies.`
-                    : '';
-                alert(`Successfully imported ${result.count} rules!${note}`);
-                onRefresh();
-            } else {
-                alert('Failed to import rules. Please check the file format.');
-            }
+            const report = await importRulesFromJson(content);
+            alert(describeImport(report));
+            if (report.success) onRefresh();
         };
         reader.readAsText(file);
         e.target.value = '';

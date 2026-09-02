@@ -10,6 +10,29 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+### Added
+- **"URL Starts With" matching.** A rule can now cover every address beginning with a given
+  prefix, which is how you keep one favicon on one document (a Google Sheet, a Notion page, a
+  Jira ticket) as the tail of its URL changes between views. Requested in a Chrome Web Store
+  review. It ranks above regex, so a document-scoped rule cannot lose to a site-wide pattern.
+- **Regex matching in the editor.** The engine had always supported it and it was unit tested,
+  but there was no way to create one without hand-editing an exported JSON file. It is now the
+  fourth scope option, with live validation.
+- **Pattern help for both.** Prefix and regex rules are prefilled from the page you are on, with
+  the query string, fragment and trailing path segment dropped, so the common case is one click.
+  The regex suggestion is escaped and anchored, which is the part people get wrong by hand. The
+  editor also shows how many of your open tabs the pattern currently matches, and which, so a
+  pattern can be checked before it is saved rather than after.
+- The rules list labels and colours all four match types.
+
+### Security
+- **Rules import is validated properly.** Every rule in an imported file is rebuilt field by
+  field rather than trusted: the match type must be one we know, a regex must compile, and the
+  icon must be an inline image or an http(s) address, which rejects `javascript:`,
+  `data:text/html` and `file:` URLs. Icons are capped at 256KB, files at 500 rules, badge text at
+  the 3 characters the editor has always implied, and unknown fields are dropped instead of
+  stored. Rules that fail are now listed with the reason rather than disappearing silently.
+
 ### Fixed
 - **Rule matching now picks the most specific rule, not the oldest.** Every matching rule is
   scored (tier rank, then matcher length as the tie-break) instead of each precedence tier being
@@ -28,7 +51,9 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   and skips a no-op save.
 - **The Badge and Overlay tool explains itself on a page with no favicon** instead of showing an
   endless loading placeholder and an Apply button that silently did nothing.
-- **The rule conflict banner's button does something.** It re-targets the editor at the
+- **The rule conflict banner covers every case and its button does something.** It now reports
+  any higher-precedence rule that would win, not just the two types it used to know about, names
+  the rule that wins, and excludes the rule being edited from shadowing itself. It re-targets the editor at the
   overriding rule, or opens Settings when that rule is a regex the popup cannot edit.
 - **The content script cannot initialise twice in one page.** It is both declared in the manifest
   and injected on demand, and a failed ping against a still-loading tab could deliver a second

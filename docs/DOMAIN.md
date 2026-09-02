@@ -55,7 +55,7 @@ the result stable and insertion-ordered.
 | Tier rank | `matchType` | Compared against | Semantics |
 |---|---|---|---|
 | 4 (highest) | `exact_url` | `window.location.href` | Byte-exact string equality, query string and hash included |
-| 3 | *reserved* | | Reserved for `prefix` (ROADMAP R-01), which must outrank regex |
+| 3 | `prefix` | `window.location.href` | `url.startsWith(matcher)`. Anchored by construction; an empty matcher never matches |
 | 2 | `regex` | `window.location.href` | `new RegExp(matcher).test(url)`, unanchored, no flags |
 | 1 (lowest) | `domain` | `window.location.hostname` | `hostname === matcher \|\| hostname.endsWith('.' + matcher)` |
 
@@ -64,8 +64,11 @@ Table name: **match-precedence**
 Consequences that surprise people:
 
 - **`exact_url` really is exact.** `https://site.com/a` and `https://site.com/a?x=1` are
-  different rules, and `https://site.com/` does not match `https://site.com`. This is the root
-  of the most-requested feature; see the prefix-matching item in [../ROADMAP.md](../ROADMAP.md).
+  different rules, and `https://site.com/` does not match `https://site.com`. `prefix` exists
+  because of this: it is the way to cover one document across its views.
+- **`prefix` outranks `regex` deliberately**, so a document-scoped rule cannot lose to a
+  site-wide pattern. See [DECISIONS.md](DECISIONS.md) ADR-013, which also explains why `prefix`
+  exists at all when regex can express the same thing.
 - **`domain` covers subdomains downward only.** A rule for `google.com` matches
   `www.google.com` and `docs.google.com`. A rule for `www.google.com` does **not** match
   `google.com`. There is no `www` normalisation.
@@ -142,7 +145,9 @@ browser can decode. Repair runs once up front and again as a retry on image load
 |---|---|
 | **Rule** | One `FaviconRule`. A user-visible row in the options list. |
 | **Matcher** | The pattern text of a rule. Not a function, the string. |
-| **Scope** | The popup's word for `matchType`, exposed as only two buttons: "Entire Domain" (`domain`) and "This Page Only" (`exact_url`). `regex` has no UI. |
+| **Scope** | The editor's word for `matchType`, exposed as four buttons: "Entire Domain" (`domain`), "This Page Only" (`exact_url`), "URL Starts With" (`prefix`) and "Regex" (`regex`). |
+| **Pattern** | The matcher for the two scopes the user types by hand, `prefix` and `regex`, as opposed to the two derived from the target page. |
+| **Suggestion** | The prefilled pattern built from the current URL by `utils/patterns.ts`: query and fragment dropped, then the last path segment when there are at least two. |
 | **Target / target page** | The page a rule is being written for; in the popup, the active tab. |
 | **Active rule** | The rule matching the current target at the current scope, drives the Active/Inactive pill. |
 | **Conflict** | A higher-precedence rule that will shadow the rule being edited. |

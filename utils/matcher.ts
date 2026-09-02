@@ -22,40 +22,50 @@ const SPECIFICITY_CAP = 9999;
 
 const TIER_RANK: Record<MatchType, number> = {
     exact_url: 4,
-    // 3 is reserved for the 'prefix' match type (ROADMAP R-01). It belongs
-    // above regex: a rule scoped to one document must not lose to a site-wide
-    // regex, and a user who wants the regex to win can make it more specific.
+    // Above regex deliberately: a rule scoped to one document must not lose to
+    // a site-wide regex, and a user who wants their regex to win can always
+    // make it more specific. See docs/DECISIONS.md ADR-013.
+    prefix: 3,
     regex: 2,
     domain: 1,
 };
 
 const NO_MATCH = -1;
 
-const scoreRule = (rule: FaviconRule, currentUrl: string, currentDomain: string): number => {
-    const tier = TIER_RANK[rule.matchType];
+const scoreMatch = (matchType: MatchType, matcher: string, currentUrl: string, currentDomain: string): number => {
+    const tier = TIER_RANK[matchType];
     // An unknown matchType (hand-edited or imported storage) never matches.
     if (tier === undefined) return NO_MATCH;
+    // Nor does an empty matcher, which would otherwise make a prefix rule match
+    // every URL on the web.
+    if (!matcher) return NO_MATCH;
 
-    const specificity = tier * (SPECIFICITY_CAP + 1) + Math.min(rule.matcher.length, SPECIFICITY_CAP);
+    const specificity = tier * (SPECIFICITY_CAP + 1) + Math.min(matcher.length, SPECIFICITY_CAP);
 
-    switch (rule.matchType) {
+    switch (matchType) {
         case 'exact_url':
-            return rule.matcher === currentUrl ? specificity : NO_MATCH;
+            return matcher === currentUrl ? specificity : NO_MATCH;
+
+        case 'prefix':
+            // Anchored by construction, and no escaping for the user to get
+            // wrong. See docs/DECISIONS.md ADR-013 for why this exists
+            // alongside regex rather than being left to regex.
+            return currentUrl.startsWith(matcher) ? specificity : NO_MATCH;
 
         case 'regex': {
-            if (!isValidRegex(rule.matcher)) {
-                logger.warn('[Favicon Matcher] Invalid Regex:', rule.matcher);
+            if (!isValidRegex(matcher)) {
+                logger.warn('[Favicon Matcher] Invalid Regex:', matcher);
                 return NO_MATCH;
             }
             try {
-                return new RegExp(rule.matcher).test(currentUrl) ? specificity : NO_MATCH;
+                return new RegExp(matcher).test(currentUrl) ? specificity : NO_MATCH;
             } catch (e) {
                 return NO_MATCH;
             }
         }
 
         case 'domain':
-            return currentDomain === rule.matcher || currentDomain.endsWith('.' + rule.matcher)
+            return currentDomain === matcher || currentDomain.endsWith('.' + matcher)
                 ? specificity
                 : NO_MATCH;
 
@@ -64,11 +74,21 @@ const scoreRule = (rule: FaviconRule, currentUrl: string, currentDomain: string)
     }
 };
 
+const scoreRule = (rule: FaviconRule, currentUrl: string, currentDomain: string): number =>
+    scoreMatch(rule.matchType, rule.matcher, currentUrl, currentDomain);
+
+/**
+ * Whether one pattern would match a given URL. Used by the editor to show, live,
+ * which of the user's open tabs a pattern covers before they save it.
+ */
+export const patternMatches = (matchType: MatchType, matcher: string, url: string, hostname: string): boolean =>
+    scoreMatch(matchType, matcher, url, hostname) !== NO_MATCH;
+
 /**
  * Picks the rule that should apply to the current page, or null if none do.
- * Precedence: exact_url > regex > domain, and within one type the longer
- * (more specific) matcher wins. On an exact tie the earlier rule wins, which
- * keeps the result stable and insertion-ordered.
+ * Precedence: exact_url > prefix > regex > domain, and within one type the
+ * longer (more specific) matcher wins. On an exact tie the earlier rule wins,
+ * which keeps the result stable and insertion-ordered.
  */
 export const findBestRule = (currentUrl: string, currentDomain: string, rules: FaviconRule[]): FaviconRule | null => {
     let best: FaviconRule | null = null;
@@ -91,21 +111,26 @@ export const findBestRule = (currentUrl: string, currentDomain: string, rules: F
  * Only checks the domain scope: nothing outranks an exact_url rule, so editing
  * one needs no warning.
  */
-export const findConflictingRule = (targetUrl: string, currentScope: 'domain' | 'exact_url', rules: FaviconRule[]): FaviconRule | null => {
-    if (currentScope !== 'domain') return null;
+export const findConflictingRule = (targetUrl: string, currentScope: MatchType, rules: FaviconRule[], targetHostname = ''): FaviconRule | null => {
+    const editedTier = TIER_RANK[currentScope];
+    if (editedTier === undefined) return null;
 
-    const exactMatch = rules.find(r => r.matchType === 'exact_url' && r.matcher === targetUrl);
-    if (exactMatch) return exactMatch;
+    // Anything in a strictly higher tier that also matches this page will win,
+    // so the edit would have no visible effect. Same-tier shadowing is still
+    // not reported (ROADMAP R-35): within a tier the winner depends on matcher
+    // length, which needs the edited matcher, not just its type.
+    let best: FaviconRule | null = null;
+    let bestScore = NO_MATCH;
 
-    const regexMatch = rules.find(r => {
-        if (r.matchType !== 'regex') return false;
-        if (!isValidRegex(r.matcher)) return false;
-        try {
-            return new RegExp(r.matcher).test(targetUrl);
-        } catch (e) {
-            return false;
+    for (const rule of rules) {
+        const tier = TIER_RANK[rule.matchType];
+        if (tier === undefined || tier <= editedTier) continue;
+        const score = scoreRule(rule, targetUrl, targetHostname);
+        if (score > bestScore) {
+            best = rule;
+            bestScore = score;
         }
-    });
+    }
 
-    return regexMatch || null;
+    return best;
 };

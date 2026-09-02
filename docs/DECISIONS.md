@@ -232,3 +232,45 @@ the cost in question is complexity and noise rather than money.
 
 **If reversed** (a workflow is added): keep the hook. The two are complementary, and the hook is
 the one that gives feedback in 9 seconds rather than 90.
+
+---
+
+## ADR-013: Keep `prefix` as its own match type, even though regex subsumes it
+**Status**: Accepted · 2026-09-02
+
+**Decision.** Ship `prefix` as a first-class match type alongside `regex`, ranked **above** regex
+in precedence, rather than telling users to express a prefix as `^escaped\\.pattern`.
+
+**The objection, which is correct as far as it goes.** A prefix match is a strict subset of what
+regex can express: `startsWith(p)` is exactly `^` plus `p` escaped. Building regex support
+therefore covers the use case, and a fourth match type is more UI, more code paths and more
+tests.
+
+**Why it earns its place anyway.** Every reason is about the failure modes of asking a person to
+write the regex by hand:
+
+1. **A pasted URL is a broken regex.** `https://example.com/a?b=1` as a pattern reads as: any
+   character where the dots are, and an optional `a` because of the `?`. It still matches the
+   page the user was looking at, so it looks like it worked, while also matching things it should
+   not. This is the failure that never gets reported, only lived with.
+2. **Regex here is unanchored.** `docs.google.com` as a regex matches
+   `https://evil.example/?x=docs.google.com`. A prefix is anchored by construction, so the
+   dangerous version cannot be written by accident.
+3. **Specificity ranking needs a meaningful length.** R-04 breaks ties inside a tier by matcher
+   length. For prefixes that is exactly right: the longer prefix is the more specific rule. For
+   regex, pattern length says little about how much it matches, so the tie-break is far weaker.
+4. **No ReDoS surface.** `startsWith` cannot backtrack. A regex is user-authored and runs against
+   every URL on every page load, with no execution timeout available in JavaScript.
+5. **It is the honest default for the common case.** "URL starts with" plus a prefilled
+   suggestion is one click. Getting the same result through regex is a small editing task that a
+   non-technical user will not attempt and a technical user should not have to.
+
+**Why it ranks above regex.** A prefix rule is scoped to one document by construction. If regex
+outranked it, a broad site-wide regex would silently beat the document-specific rule the user
+just created, which is precisely the "matching feels random" complaint R-04 set out to fix. A
+user who wants their regex to win can make it more specific; a user whose prefix loses has no
+recourse.
+
+**Consequence.** Four scope options in the editor rather than two, and `MATCH_TYPES` has to be
+validated on import (R-07) because an unknown type is now a realistic thing to receive from an
+older or newer export.

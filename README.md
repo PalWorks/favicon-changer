@@ -16,9 +16,11 @@ and stored on your own device.
 - **🎨 Custom uploads**: any PNG, JPEG, SVG or WebP, with fit / fill / stretch framing.
 - **😀 Emoji**: a searchable, categorised emoji library rendered straight to an icon.
 - **🏷️ Badges and overlays**: text badges and colour washes composited over a site's real icon.
-- **📂 Per-site rules**: match a whole domain or one exact URL, and exclude sites you want left
-  alone. (Regex matching exists in the engine but has no UI yet, see
-  [ROADMAP.md](ROADMAP.md) R-02.)
+- **📂 Four ways to match**: a whole domain, one exact URL, a **URL prefix** (one document across
+  all its views), or a **regular expression**. Plus an exclusion list for sites you want left
+  alone entirely.
+- **🎯 Pattern help**: prefix and regex rules are prefilled from the page you are on, and the
+  editor shows live how many of your open tabs a pattern would match before you save it.
 - **⚡ Auto-compression**: icons are downscaled and compressed to fit the browser storage quota.
 - **🔁 Import / export**: back up or share your rules as JSON.
 - **🐞 Support logs**: opt-in verbose logging you can download and send when something breaks.
@@ -70,7 +72,8 @@ options.html    settings page (React)
 
 A rule is `{matcher, matchType, faviconUrl}`; the icon is normally an inline PNG `data:` URL, so
 nothing is fetched at page load. On every page the content script reads the rules, picks the best
-match (`exact_url` > `regex` > `domain`), and mutates the `href` of the `<link rel=icon>` element
+match (`exact_url` > `prefix` > `regex` > `domain`, most specific matcher first within a type),
+and mutates the `href` of the `<link rel=icon>` element
 Chrome is already tracking, which is the only DOM change that repaints a **background** tab's
 icon.
 

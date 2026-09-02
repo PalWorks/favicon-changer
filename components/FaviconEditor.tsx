@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson, openExpandedEditor, consumePendingEditorTarget } from '../utils/storage';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson, openExpandedEditor, consumePendingEditorTarget, getOpenTabs, OpenTab } from '../utils/storage';
 import { logger } from '../utils/logger';
-import { findConflictingRule } from '../utils/matcher';
+import { findConflictingRule, patternMatches } from '../utils/matcher';
 import { popupClosesOnFileDialog } from '../utils/platform';
+import { hostnameFromInput, suggestPrefix, suggestRegex } from '../utils/patterns';
+import { describeImport } from '../utils/importRules';
+import { isValidRegex } from '../utils/validation';
 
 import { FaviconRule, MatchType, TabInfo } from '../types';
 import { Button } from './Button';
@@ -10,6 +13,19 @@ import { FaviconPreview } from './FaviconPreview';
 import { UploadSection } from './editor/UploadSection';
 import { EmojiSection } from './editor/EmojiSection';
 import { BadgeSection } from './editor/BadgeSection';
+
+// The scope control. Order is deliberate: the original two come first so
+// existing users' muscle memory still works, with the two pattern types after.
+const SCOPES: { type: MatchType; label: string; hint: string }[] = [
+    { type: 'domain', label: 'Entire Domain', hint: 'Every page on this site, subdomains included.' },
+    { type: 'exact_url', label: 'This Page Only', hint: 'Only this exact address, query string and all.' },
+    { type: 'prefix', label: 'URL Starts With', hint: 'Every address beginning with this text. Good for one document across its views.' },
+    { type: 'regex', label: 'Regex', hint: 'A regular expression tested against the whole URL. Unanchored unless you add ^.' },
+];
+
+// Scopes whose matcher is a pattern the user edits, rather than being taken
+// from the target page.
+const PATTERN_SCOPES: MatchType[] = ['prefix', 'regex'];
 
 interface FaviconEditorProps {
     mode: 'popup' | 'options';
@@ -29,13 +45,14 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
 
     // Inputs
     const [manualUrl, setManualUrl] = useState('');
-    const [applyScope, setApplyScope] = useState<'domain' | 'exact_url'>('exact_url');
-    // The two scope buttons can only express 'domain' and 'exact_url'. When the
-    // rule being edited uses a type they cannot represent (currently 'regex',
-    // which has no UI yet), its real type is held here so saving preserves it
-    // instead of silently rewriting the rule as an exact-URL match. Cleared the
-    // moment the user picks a scope explicitly.
-    const [preservedMatchType, setPreservedMatchType] = useState<MatchType | null>(null);
+    const [applyScope, setApplyScope] = useState<MatchType>('exact_url');
+    // The matcher for the pattern scopes (prefix, regex), which the user edits
+    // directly. patternDraftFor records which scope the current draft was built
+    // for, so switching prefix <-> regex regenerates it (the syntaxes differ)
+    // while switching away and back keeps the user's edits.
+    const [patternDraft, setPatternDraft] = useState('');
+    const [patternDraftFor, setPatternDraftFor] = useState<MatchType | null>(null);
+    const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
     const [fileAccess, setFileAccess] = useState(true);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     // Whether this OS kills the action popup when a file dialog opens, so the
@@ -47,6 +64,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
 
     useEffect(() => {
         popupClosesOnFileDialog().then(setPopupDropsFileDialog);
+        getOpenTabs().then(setOpenTabs);
     }, []);
 
     useEffect(() => {
@@ -64,6 +82,10 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                 logger.debug('Expanded editor: loaded handoff target', target);
                 setCurrentTab({ url: target.url, domain: target.domain, favIconUrl: target.favIconUrl });
                 setApplyScope(target.scope);
+                if (PATTERN_SCOPES.includes(target.scope)) {
+                    setPatternDraft(target.matcher || suggestionFor(target.scope, target.url));
+                    setPatternDraftFor(target.scope);
+                }
                 // Icon-opened window: collapsed like the bubble. Browse-handoff: open upload.
                 setOpenSection(target.section || null);
             } else {
@@ -75,11 +97,24 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         })();
     }, [mode, context]);
 
-    // Picking a scope by hand is an explicit choice, so it discards any
-    // preserved match type (see preservedMatchType above).
-    const selectScope = (scope: 'domain' | 'exact_url') => {
-        setPreservedMatchType(null);
+    // Prefills a pattern that covers "this document" rather than this exact
+    // page, so prefix and regex rules are usually one click rather than a
+    // text-editing exercise. See utils/patterns.ts.
+    const suggestionFor = (scope: MatchType, url: string): string => {
+        if (!url) return '';
+        if (scope === 'prefix') return suggestPrefix(url);
+        if (scope === 'regex') return suggestRegex(url);
+        return '';
+    };
+
+    const selectScope = (scope: MatchType) => {
         setApplyScope(scope);
+        // Regenerate only when the draft was built for a different scope, so
+        // toggling away and back does not throw away the user's edits.
+        if (PATTERN_SCOPES.includes(scope) && patternDraftFor !== scope) {
+            setPatternDraft(suggestionFor(scope, mode === 'popup' ? currentTab.url : manualUrl));
+            setPatternDraftFor(scope);
+        }
     };
 
     // Action popup can't host a native file dialog without closing itself, so the
@@ -91,6 +126,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                 domain: currentTab.domain,
                 favIconUrl: currentTab.favIconUrl,
                 scope: applyScope,
+                matcher: patternDraft,
                 section: 'upload',
             });
         } catch (e) {
@@ -107,15 +143,13 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         if (initialRule) {
             logger.debug('Loading initial rule', initialRule);
             setManualUrl(initialRule.matcher);
-            if (initialRule.matchType === 'domain' || initialRule.matchType === 'exact_url') {
-                setApplyScope(initialRule.matchType);
-                setPreservedMatchType(null);
+            setApplyScope(initialRule.matchType);
+            if (PATTERN_SCOPES.includes(initialRule.matchType)) {
+                setPatternDraft(initialRule.matcher);
+                setPatternDraftFor(initialRule.matchType);
             } else {
-                // e.g. a regex rule, reachable today only via rules import.
-                // Show the closest scope, but remember the real type so the
-                // save below does not downgrade the rule.
-                setApplyScope('exact_url');
-                setPreservedMatchType(initialRule.matchType);
+                setPatternDraft('');
+                setPatternDraftFor(null);
             }
 
             // Auto-expand section based on sourceType or metadata
@@ -146,7 +180,8 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             logger.debug('Resetting editor for new rule');
             setManualUrl('');
             setApplyScope('exact_url');
-            setPreservedMatchType(null);
+            setPatternDraft('');
+            setPatternDraftFor(null);
             setOpenSection(null);
             setCurrentTab({ url: '', domain: '', favIconUrl: '' });
         }
@@ -198,22 +233,71 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         }
     };
 
+    // --- Target and matcher derivation ---------------------------------------
+    // One place that decides what this rule will match, shared by the save path,
+    // the Active/Inactive pill and the live pattern preview, so the three can
+    // never disagree about which rule is being edited.
+    const targetUrl = mode === 'popup' ? currentTab.url : manualUrl;
+    const targetDomain = mode === 'popup' ? currentTab.domain : hostnameFromInput(manualUrl);
+
+    const currentMatcher =
+        applyScope === 'domain' ? targetDomain
+            : applyScope === 'exact_url' ? targetUrl
+                : patternDraft.trim();
+
+    const patternError = useMemo(() => {
+        if (!PATTERN_SCOPES.includes(applyScope)) return null;
+        const value = patternDraft.trim();
+        if (!value) return null; // incomplete rather than wrong; the save path handles empty
+        if (applyScope === 'regex' && !isValidRegex(value)) {
+            return 'That is not a valid regular expression.';
+        }
+        if (applyScope === 'prefix' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+            // A prefix is compared against the whole URL, so it has to start
+            // where the URL starts.
+            return 'A prefix has to start from the beginning of the address, e.g. https://example.com/docs';
+        }
+        return null;
+    }, [applyScope, patternDraft]);
+
+    // Which of the user's open tabs this pattern would cover. Shown live, so a
+    // pattern can be sanity-checked before it is saved rather than after.
+    const patternPreview = useMemo(() => {
+        if (!PATTERN_SCOPES.includes(applyScope) || !currentMatcher || patternError) return null;
+        return {
+            matched: openTabs.filter(tab => patternMatches(applyScope, currentMatcher, tab.url, tab.hostname)),
+            total: openTabs.length,
+            coversTarget: !!targetUrl && patternMatches(applyScope, currentMatcher, targetUrl, targetDomain),
+        };
+    }, [applyScope, currentMatcher, patternError, openTabs, targetUrl, targetDomain]);
+
+    const activeScope = SCOPES.find(s => s.type === applyScope);
+
     const handleSave = async (url: string, sourceType: FaviconRule['sourceType'], metadata?: FaviconRule['metadata']) => {
         setIsSaving(true);
         logger.info('Attempting to save rule', { sourceType, metadata });
 
         try {
-            const targetUrl = mode === 'popup' ? currentTab.url : manualUrl;
-            const targetDomain = mode === 'popup' ? currentTab.domain : (manualUrl ? new URL(manualUrl.startsWith('http') ? manualUrl : `https://${manualUrl}`).hostname : '');
-
             if (!targetUrl) {
                 logger.warn('Save failed: No target URL specified');
                 setStatusMessage({ type: 'error', text: 'No target URL specified.' });
                 throw new Error('No target URL specified.');
             }
 
-            const matchType: MatchType = preservedMatchType ?? applyScope;
-            const matcher = matchType === 'domain' ? targetDomain : targetUrl;
+            const matchType = applyScope;
+            const matcher = currentMatcher;
+
+            if (!matcher) {
+                const message = matchType === 'domain'
+                    ? 'Could not read a domain from that address.'
+                    : 'Enter a pattern to match.';
+                setStatusMessage({ type: 'error', text: message });
+                throw new Error(message);
+            }
+            if (patternError) {
+                setStatusMessage({ type: 'error', text: patternError });
+                throw new Error(patternError);
+            }
 
             // When a known rule is loaded in the editor, keep editing THAT rule.
             // Looking it up by matcher + matchType used to miss any rule whose
@@ -308,22 +392,18 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         reader.onload = async (ev) => {
             const content = ev.target?.result as string;
             try {
-                const result = await importRulesFromJson(content);
-                if (result.success) {
-                    logger.info('Rules imported successfully', result);
-                    const note = result.remoteCount > 0
-                        ? `\n\nNote: ${result.remoteCount} rule(s) use a remote image URL that will be fetched from its source whenever the rule applies.`
-                        : '';
-                    alert(`Successfully imported ${result.count} rules!${note}`);
+                const report = await importRulesFromJson(content);
+                logger.info('Import finished', { success: report.success, count: report.count, rejected: report.rejected.length });
+                // Rejected rules are reported individually with a reason, rather
+                // than dropped silently as they were before R-07.
+                alert(describeImport(report));
+                if (report.success) {
                     refreshData();
                     if (onRuleSaved) onRuleSaved();
-                } else {
-                    logger.warn('Import failed: Invalid format');
-                    alert('Failed to import rules. Invalid file format.');
                 }
             } catch (err) {
                 logger.error('Import crashed', err);
-                alert('Failed to import rules.');
+                alert('Could not read that file.');
             }
         };
         reader.readAsText(file);
@@ -334,47 +414,43 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         setOpenSection(prev => prev === section ? null : section);
     };
 
-    const activeRule = rules.find(r => {
-        const targetMatcher = mode === 'popup' ? (applyScope === 'domain' ? currentTab.domain : currentTab.url) : manualUrl;
-        return r.matcher === targetMatcher && r.matchType === applyScope;
-    });
+    const activeRule = rules.find(r => r.matcher === currentMatcher && r.matchType === applyScope);
 
     const hasValidTarget = mode === 'popup' ? !!currentTab.url : !!manualUrl;
 
 
     const [conflictRule, setConflictRule] = useState<FaviconRule | null>(null);
 
-    // Check for conflicts/shadowing
+    // Check for conflicts/shadowing. Any rule in a strictly higher precedence
+    // tier that also matches this page will win, so the edit would have no
+    // visible effect and the user should be told before they save.
     useEffect(() => {
-        if (mode !== 'popup' || !currentTab.url) {
+        if (!targetUrl) {
             setConflictRule(null);
             return;
         }
+        // A rule being edited cannot shadow itself.
+        const others = initialRule ? rules.filter(r => r.id !== initialRule.id) : rules;
+        setConflictRule(findConflictingRule(targetUrl, applyScope, others, targetDomain));
+    }, [applyScope, targetUrl, targetDomain, rules, initialRule]);
 
-        const conflict = findConflictingRule(currentTab.url, applyScope, rules);
-        setConflictRule(conflict);
-    }, [applyScope, currentTab.url, rules, mode]);
-
-    // The overriding rule can only be edited here when the popup's two scope
-    // buttons can express its match type. A regex rule cannot be, so there we
-    // send the user to the settings page rather than offer a control that does
-    // nothing, which is what this button used to do in every case (L-08).
-    const canEditConflictHere = conflictRule?.matchType === 'exact_url';
-
+    // Re-targets the editor at the rule that would win, so the user can edit
+    // that one instead. Every match type is representable in the editor now
+    // (R-02), so this can always act; it used to be a button that did nothing
+    // in every case (L-08).
     const switchToConflictRule = () => {
         if (!conflictRule) return;
 
-        if (canEditConflictHere) {
-            // Re-targets the editor at the exact-URL rule for this page: the
-            // Active pill, the Reset button and any save now refer to that rule,
-            // and the conflict banner clears itself because nothing outranks it.
-            selectScope('exact_url');
-            setStatusMessage({ type: 'success', text: 'Now editing the Exact URL rule for this page.' });
-            setTimeout(() => setStatusMessage(null), 2500);
-            return;
+        selectScope(conflictRule.matchType);
+        if (PATTERN_SCOPES.includes(conflictRule.matchType)) {
+            setPatternDraft(conflictRule.matcher);
+            setPatternDraftFor(conflictRule.matchType);
         }
+        if (mode === 'options') setManualUrl(conflictRule.matcher);
 
-        openOptionsPage();
+        const label = SCOPES.find(s => s.type === conflictRule.matchType)?.label || conflictRule.matchType;
+        setStatusMessage({ type: 'success', text: `Now editing the ${label} rule for this page.` });
+        setTimeout(() => setStatusMessage(null), 2500);
     };
 
     return (
@@ -434,14 +510,14 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                             <div className="flex items-start gap-2">
                                 <span className="text-lg">⚠️</span>
                                 <div>
-                                    <p className="text-xs font-bold text-orange-800">Rule Conflict Detected</p>
+                                    <p className="text-xs font-bold text-orange-800">Another rule wins here</p>
                                     <p className="text-[10px] text-orange-700 leading-tight mt-1">
-                                        You are editing a <strong>Domain</strong> rule, but an <strong>{conflictRule.matchType === 'exact_url' ? 'Exact URL' : 'Regex'}</strong> rule is currently active for this page. Your changes will be saved, but the other rule will take precedence.
+                                        You are editing a <strong>{activeScope?.label || applyScope}</strong> rule, but a more specific <strong>{SCOPES.find(s => s.type === conflictRule.matchType)?.label || conflictRule.matchType}</strong> rule already matches this page (<span className="font-mono break-all">{conflictRule.matcher}</span>). Your change will be saved, but that rule takes precedence.
                                     </p>
                                 </div>
                             </div>
                             <Button size="sm" variant="secondary" onClick={switchToConflictRule} className="w-full text-[10px] h-7 bg-white border-orange-200 text-orange-700 hover:bg-orange-100">
-                                {canEditConflictHere ? 'Edit that rule instead' : 'Manage it in Settings'}
+                                Edit that rule instead
                             </Button>
                         </div>
                     )}
@@ -505,21 +581,90 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                             </div>
                         )}
 
-                        {/* Scope Toggles */}
-                        <div className="flex bg-slate-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => selectScope('domain')}
-                                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${applyScope === 'domain' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                Entire Domain
-                            </button>
-                            <button
-                                onClick={() => selectScope('exact_url')}
-                                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${applyScope === 'exact_url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                            >
-                                This Page Only
-                            </button>
+                        {/* Scope selector. A 2x2 grid rather than one row so the
+                            labels stay readable in the 400px popup. */}
+                        <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-lg">
+                            {SCOPES.map(scope => (
+                                <button
+                                    key={scope.type}
+                                    onClick={() => selectScope(scope.type)}
+                                    title={scope.hint}
+                                    aria-pressed={applyScope === scope.type}
+                                    className={`py-1.5 px-1 text-xs font-medium rounded-md transition-all ${applyScope === scope.type ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {scope.label}
+                                </button>
+                            ))}
                         </div>
+
+                        {activeScope && (
+                            <p className="text-[10px] text-slate-400 leading-snug mt-2 px-1">{activeScope.hint}</p>
+                        )}
+
+                        {/* Pattern editor, for the scopes whose matcher is not
+                            taken from the target page. */}
+                        {PATTERN_SCOPES.includes(applyScope) && (
+                            <div className="mt-3 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <label htmlFor="fc-pattern" className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                        {applyScope === 'prefix' ? 'URL starts with' : 'Regular expression'}
+                                    </label>
+                                    {targetUrl && (
+                                        <button
+                                            onClick={() => {
+                                                setPatternDraft(suggestionFor(applyScope, targetUrl));
+                                                setPatternDraftFor(applyScope);
+                                            }}
+                                            className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700"
+                                        >
+                                            Suggest from this page
+                                        </button>
+                                    )}
+                                </div>
+                                <input
+                                    id="fc-pattern"
+                                    type="text"
+                                    value={patternDraft}
+                                    onChange={(e) => { setPatternDraft(e.target.value); setPatternDraftFor(applyScope); }}
+                                    spellCheck={false}
+                                    placeholder={applyScope === 'prefix' ? 'https://example.com/docs' : '^https://example\\.com/docs'}
+                                    className={`w-full border rounded-md px-3 py-2 text-xs font-mono outline-none focus:ring-2 ${patternError ? 'border-red-300 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                                />
+
+                                {patternError ? (
+                                    <p className="text-[10px] text-red-600 leading-snug">{patternError}</p>
+                                ) : patternPreview ? (
+                                    <div className="text-[10px] leading-snug">
+                                        <p className={patternPreview.coversTarget || mode === 'options' ? 'text-slate-500' : 'text-amber-700'}>
+                                            {mode === 'popup' && (patternPreview.coversTarget
+                                                ? 'Matches this page. '
+                                                : 'Does not match this page. ')}
+                                            {patternPreview.total > 0
+                                                ? `Matches ${patternPreview.matched.length} of your ${patternPreview.total} open tab${patternPreview.total === 1 ? '' : 's'}.`
+                                                : 'No open tabs to check against.'}
+                                        </p>
+                                        {patternPreview.matched.length > 0 && (
+                                            <ul className="mt-1 space-y-0.5 max-h-20 overflow-y-auto">
+                                                {patternPreview.matched.slice(0, 4).map((tab, i) => (
+                                                    <li key={`${tab.url}-${i}`} className="text-slate-400 truncate" title={tab.url}>
+                                                        {tab.title || tab.hostname}
+                                                    </li>
+                                                ))}
+                                                {patternPreview.matched.length > 4 && (
+                                                    <li className="text-slate-400">and {patternPreview.matched.length - 4} more</li>
+                                                )}
+                                            </ul>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400">
+                                        {applyScope === 'prefix'
+                                            ? 'Every address beginning with this text will use your icon.'
+                                            : 'Tested against the whole URL. Add ^ to anchor it to the start.'}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {!fileAccess && currentTab.url.startsWith('file:') && (

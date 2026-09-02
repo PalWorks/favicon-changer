@@ -1,4 +1,10 @@
-export type MatchType = 'domain' | 'exact_url' | 'regex';
+// Ordered here loosely from broadest to narrowest for readability only; the
+// precedence that actually applies lives in utils/matcher.ts.
+export type MatchType = 'domain' | 'prefix' | 'exact_url' | 'regex';
+
+// Every valid match type, for validating data arriving from outside the UI
+// (a rules JSON import, or storage a user has hand-edited).
+export const MATCH_TYPES: MatchType[] = ['domain', 'prefix', 'exact_url', 'regex'];
 
 export interface FaviconRule {
   id: string;          // Unique ID (UUID)
