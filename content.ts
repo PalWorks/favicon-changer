@@ -1,7 +1,5 @@
 // This file is the Content Script. 
 
-declare const chrome: any;
-
 import { FaviconRule, GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
@@ -244,29 +242,43 @@ function applyRule() {
   });
 }
 
-// Listen for messages from Popup/Options
-chrome.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
-  logger.debug('[Content] Message received:', message);
-  if (message.type === 'PING') {
-    // Responds to ensureContentScriptReady() in messaging.ts so the caller
-    // knows the content script is loaded without needing a script injection.
-    sendResponse({ ok: true });
-  } else if (message.type === 'RulesUpdated') {
-    logger.info('[Content] RulesUpdated received, re-applying rules...');
-    applyRule(); // href mutation repaints the tab (active or background) without reload
-    sendResponse({ ok: true });
-  } else if (message.type === 'RESET_ICON') {
-    sendResponse({ ok: true });
-    if (observer) observer.disconnect();
-    window.location.reload();
-  }
-});
+// --- INITIALISATION ---
+//
+// Latch against a second copy of this script initialising in the same page
+// context. This script is declared in the manifest for <all_urls>, AND
+// ensureContentScriptReady() injects it on demand for tabs the declaration
+// never reached (see DECISIONS ADR-008). A PING that races a still-loading tab
+// fails, so the caller injects, and the page can end up running two copies.
+// Without this latch that leaves two MutationObservers, two backup intervals
+// and two onMessage listeners live in one page (LIMITATIONS L-13); the extra
+// listener also breaks the sendResponse contract, since both would reply.
+const fcuWindow = window as unknown as { __fcuContentLoaded?: boolean };
 
-// Run on start
-logger.info('[Content] Content Script Loaded');
-if (document.readyState === 'loading') {
-  // Wrap so the DOMContentLoaded Event object isn't passed to applyRule().
-  document.addEventListener('DOMContentLoaded', () => applyRule());
+if (fcuWindow.__fcuContentLoaded) {
+  logger.debug('[Content] Already initialised in this context, skipping duplicate injection');
 } else {
-  applyRule();
+  fcuWindow.__fcuContentLoaded = true;
+
+  // Listen for messages from Popup/Options
+  chrome.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: any) => {
+    logger.debug('[Content] Message received:', message);
+    if (message.type === 'PING') {
+      // Responds to ensureContentScriptReady() in messaging.ts so the caller
+      // knows the content script is loaded without needing a script injection.
+      sendResponse({ ok: true });
+    } else if (message.type === 'RulesUpdated') {
+      logger.info('[Content] RulesUpdated received, re-applying rules...');
+      applyRule(); // href mutation repaints the tab (active or background) without reload
+      sendResponse({ ok: true });
+    }
+  });
+
+  // Run on start
+  logger.info('[Content] Content Script Loaded');
+  if (document.readyState === 'loading') {
+    // Wrap so the DOMContentLoaded Event object isn't passed to applyRule().
+    document.addEventListener('DOMContentLoaded', () => applyRule());
+  } else {
+    applyRule();
+  }
 }
