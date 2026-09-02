@@ -1,0 +1,105 @@
+# Testing
+
+## Philosophy
+
+Extension code splits cleanly into three testability tiers, and the strategy follows that split:
+
+| Tier | Files | How it is verified | Status |
+|---|---|---|---|
+| Pure logic | `utils/matcher.ts`, `utils/validation.ts` | Vitest in plain Node, fast, deterministic | matcher done, validation untested |
+| Browser-API logic | `utils/storage.ts`, `utils/messaging.ts`, `utils/logger.ts` | Vitest with a stubbed `chrome` global | untested |
+| Canvas + DOM behaviour | `utils/canvas.ts`, `content.ts`, all components | Manual, unpacked, in a real browser | manual only |
+
+Table name: **test-tiers**
+
+The highest-value target is tier 1, because rule matching is where user-visible correctness
+lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
+specifically so it can be tested this way, keep it that way.
+
+Current coverage: **20 tests, 1 file** ([utils/matcher.test.ts](../utils/matcher.test.ts)),
+covering every precedence tier, subdomain behaviour, invalid-regex handling and the conflict
+detector. Run time ~300 ms.
+
+---
+
+## Running
+
+```bash
+npm test              # once, CI-style
+npx vitest            # watch
+npx vitest run --coverage   # needs @vitest/coverage-v8 installed first
+npx tsc --noEmit      # type check, separate from tests, and not part of the build
+```
+
+`npx tsc --noEmit` is **not currently a usable gate**: `@types/react` and `@types/react-dom` are
+not installed, so it reports 1 known error and infers React from JavaScript rather than checking
+it ([LIMITATIONS.md](LIMITATIONS.md) L-29). Installing the types surfaced 11 errors covering a
+real prop bug (L-30). Treat ROADMAP R-00 as a prerequisite for meaningful static checking.
+
+There is no `vitest.config.ts`. Defaults apply: Node environment, `*.test.ts` discovery. A
+`jsdom` environment would be needed before testing anything that touches `document` or `canvas`.
+
+---
+
+## Conventions
+
+**Stub the logger.** Every `utils/` module imports `logger`, which calls `chrome.storage` at
+module scope. In Node that throws. Mock it at the top of the file:
+
+```ts
+vi.mock('./logger', () => ({
+  logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+```
+
+**Use a rule factory,** not inline literals, `FaviconRule` has nine fields and only two matter
+per test. The existing `rule()` helper in `matcher.test.ts` takes `matchType` and `matcher` as
+required and fills the rest.
+
+**Name the behaviour, not the function.** `it('exact URL beats domain rule on the same site')`,
+not `it('findBestRule works')`.
+
+**Assert on identity or on a marker field.** The existing tests return the rule object and check
+`toBe(r)` or set a distinctive `faviconUrl` (`'exact.png'`) to prove *which* rule won. Do not
+assert on `createdAt`, it is overwritten on every save.
+
+---
+
+## What a change must be tested against manually
+
+`npm run build`, reload unpacked, then walk this list. These are the cases that have actually
+broken before, in the order they broke:
+
+1. **Active tab**, apply an emoji rule; the tab icon changes immediately.
+2. **Background tab**, apply a rule to a page in a *non-focused* tab; its icon must change
+   without a reload. This is the one that regresses when `updateFavicon` is refactored.
+   See [DECISIONS.md](DECISIONS.md) ADR-001.
+3. **SPA that rewrites its own icon** (Gmail or Google Analytics). Our icon must win and must not
+   oscillate; watch the CPU, a mutation war is visible as a pinned core.
+4. **A page with no rule**, must stay completely untouched. Confirm nothing is logged and the
+   site's own icon is intact. ADR-002.
+5. **An excluded domain**, add it in options; the page must be inert even with a matching rule.
+6. **Rule deletion**, the original favicon comes back on the affected tabs.
+7. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
+   survives; the file must apply to the tab the popup was opened from. ADR-007.
+8. **Drag-and-drop upload in the bubble**, works on every OS with no hand-off.
+9. **An SVG favicon site** (github.com), export the original, re-upload the exported file; it
+   must decode rather than showing a broken image. This is what `normalizeImageDataUrl` guards.
+10. **Import/export round trip**, export, delete all rules, re-import, rules return.
+11. **Options ⇄ popup live sync**, with both open, a change in one appears in the other.
+
+---
+
+## Gaps worth closing, highest value first
+
+1. `utils/validation.ts`, pure and trivially testable, currently zero tests.
+2. The storage migration in `getStorageData()`, old-format input, latch behaviour, and the
+   "already migrated" short-circuit; needs a `chrome.storage.local` stub.
+3. `normalizeImageDataUrl()`, pure string/`atob` work, no canvas needed. Test SVG-as-PNG repair,
+   plain PNG passthrough, malformed data URLs, non-data URLs.
+4. `isRestrictedUrl()`, pure, and the gate protecting every injection call site.
+5. A `jsdom` suite for `content.ts`'s `updateFavicon`, asserting that the *same element instance*
+   is mutated rather than replaced would lock ADR-001 into the test suite, which is where it
+   belongs.
+
+There is no CI. Tests only run when someone remembers. See [../ROADMAP.md](../ROADMAP.md).

@@ -27,7 +27,7 @@ The extension makes no network requests of its own accord. There are exactly thr
 The extension requests the minimum permissions needed to function:
 - **Storage**: To save your favicon rules and settings on your device.
 - **Scripting**: To inject the new favicon into a page when the page's content script needs to be (re)loaded.
-- **Host Permissions (`<all_urls>`)**: Required to read the current page and apply favicon changes on any website you visit. This is core to the extension's single purpose — changing favicons.
+- **Host Permissions (`<all_urls>`)**: Required to read the current page and apply favicon changes on any website you visit. This is core to the extension's single purpose, changing favicons.
 
 ## Changes to This Policy
 We may update this Privacy Policy from time to time. Any changes will be posted on this page.
