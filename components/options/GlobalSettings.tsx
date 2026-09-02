@@ -79,7 +79,7 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                 <div className="pt-4 border-t border-slate-100">
                     <label className="block text-sm font-medium text-slate-700 mb-2">Excluded Sites</label>
                     <p className="text-xs text-slate-500 mb-3">
-                        The extension will never touch these domains — no favicon changes, no DOM mutations.
+                        The extension will never touch these domains: no favicon changes, no DOM mutations.
                     </p>
                     <div className="flex gap-2 mb-3">
                         <input
