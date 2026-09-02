@@ -44,6 +44,9 @@ export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEd
                                 </div>
                                 <p className="text-xs text-slate-400">
                                     Created {new Date(rule.createdAt).toLocaleDateString()}
+                                    {rule.updatedAt && new Date(rule.updatedAt).toLocaleDateString() !== new Date(rule.createdAt).toLocaleDateString()
+                                        ? ` · edited ${new Date(rule.updatedAt).toLocaleDateString()}`
+                                        : ''}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">

@@ -23,7 +23,8 @@ export interface FaviconRule {
     // Upload
     imageMode?: 'contain' | 'cover' | 'stretch';
   };
-  createdAt: number;
+  createdAt: number;   // first save; preserved across later edits
+  updatedAt?: number;  // last save. Absent on rules written before this existed
 }
 
 export interface GlobalSettings {
