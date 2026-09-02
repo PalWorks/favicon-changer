@@ -11,6 +11,30 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 ## [Unreleased]
 
 ### Fixed
+- **Rule matching now picks the most specific rule, not the oldest.** Every matching rule is
+  scored (tier rank, then matcher length as the tie-break) instead of each precedence tier being
+  scanned first-match-wins. A domain rule for `docs.google.com` now beats one for `google.com`
+  on a docs URL whichever was created first. Tier rank still dominates length, so a long regex
+  cannot outrank an exact URL.
+- **Editing a regex rule no longer destroys it.** The options editor coerced a loaded rule's
+  match type into one of its two scope buttons, so saving a regex rule rewrote it as an exact URL
+  match holding the regex source as a literal URL, and the existing-rule lookup then failed to
+  recognise it and saved a duplicate under a new id. One edit produced two bad rules. The real
+  match type is preserved, and a loaded rule is now looked up by id.
+- **`createdAt` is no longer overwritten on every save**, so the rules list's Created column
+  means what it says. A new optional `updatedAt` records the last edit.
+- **The default fallback favicon field no longer writes on every keystroke.** It committed to
+  storage and broadcast to every open tab per character typed; it now commits on blur or Enter,
+  and skips a no-op save.
+- **The Badge and Overlay tool explains itself on a page with no favicon** instead of showing an
+  endless loading placeholder and an Apply button that silently did nothing.
+- **The rule conflict banner's button does something.** It re-targets the editor at the
+  overriding rule, or opens Settings when that rule is a regex the popup cannot edit.
+- **The content script cannot initialise twice in one page.** It is both declared in the manifest
+  and injected on demand, and a failed ping against a still-loading tab could deliver a second
+  copy, leaving two observers, two polling intervals and two message listeners.
+- One source of truth for the popup-closes-on-file-dialog OS check, which was previously decided
+  twice by two different mechanisms that could disagree.
 - **React type definitions were never installed** (`@types/react`, `@types/react-dom`). React 19
   ships none, and `allowJs: true` let TypeScript infer React from its JavaScript, so every
   component, prop and hook was unchecked. Installing them surfaced one real defect:
@@ -18,6 +42,16 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   full size, and `size` leaked onto the DOM `<button>` through the props spread. `Button` now
   takes `size?: 'sm' | 'md'` and keeps it out of the DOM.
 - Em dashes removed from the three user-facing strings that contained them.
+
+### Removed
+- Dead code, each symbol verified unreferenced across the whole repo first: `generateFavicon` and
+  its `GenerateFaviconOptions`/`Shape` types, `EXTENSION_WIDTH`/`EXTENSION_HEIGHT`,
+  `DEFAULT_EMOJIS`, an unused `TabInfo` import, a duplicate `TabInfo` interface, and the
+  `RESET_ICON` message handler that nothing had ever sent.
+- `declare const chrome: any` from `content.ts` and `utils/storage.ts`, which shadowed the real
+  `@types/chrome` definitions. Removing it produced zero errors, so it was pure debt.
+- An unused `loadEnv` call and an empty `define` block in `vite.config.ts`, left over from
+  removed Gemini API key plumbing.
 
 ### Added
 - **Pre-push checks** in [.githooks/pre-push](.githooks/pre-push): type check, unit tests and the

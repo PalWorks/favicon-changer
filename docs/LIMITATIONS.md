@@ -23,7 +23,7 @@ scope control is typed `'domain' | 'exact_url'`
 ([FaviconEditor.tsx:38](../components/FaviconEditor.tsx#L38)), so nothing can produce one. Regex
 rules can only enter storage by hand-editing an exported JSON file and re-importing it.
 
-### L-03 · Editing a regex rule silently converts it to `exact_url` **and duplicates it** → **R-03**
+### L-03 · Editing a regex rule converted it to `exact_url` and duplicated it · *resolved 2026-09-02, R-03 done*
 Loading a rule into the options editor coerces the scope
 ([FaviconEditor.tsx:94](../components/FaviconEditor.tsx#L94)); on save, `matchType` becomes
 `exact_url` while `matcher` keeps the regex source, so it matches nothing. Because the
@@ -32,7 +32,7 @@ existing-rule lookup keys on `matcher` **and** `matchType`
 generates a fresh `id`, and leaves the regex rule in place, the user now has two rules, one
 broken. Data loss in practice. Blocks L-02 from being useful.
 
-### L-04 · Within one tier, the oldest rule wins, not the most specific → **R-04**
+### L-04 · Within one tier the oldest rule won, not the most specific · *resolved 2026-09-02, R-04 done*
 `findBestRule` uses `Array.find` at each tier
 ([utils/matcher.ts:7,11,27](../utils/matcher.ts#L27)) over `Object.values(rules)`, i.e. insertion
 order. With domain rules for both `google.com` and `docs.google.com`, whichever was created first
@@ -53,25 +53,25 @@ The settings copy says "if a site has no favicon"; the implementation applies
 ([content.ts:216](../content.ts#L216)), regardless of whether that page has its own icon. Users
 set it once and believe the extension has gone rogue across the whole web.
 
-### L-07 · Typing in the fallback URL field writes storage and messages every tab per keystroke → **R-05**
+### L-07 · The fallback URL field wrote storage and messaged every tab per keystroke · *resolved 2026-09-02, R-05 done*
 [GlobalSettings.tsx:69](../components/options/GlobalSettings.tsx#L69) calls `onSettingsChange` on
 every `onChange`, which reaches `saveSettings` → `persistData` + `notifyTabs()`. A 40-character
 URL is 40 storage writes and 40 full-tab-broadcasts, each of which may inject a content script.
 There is also an `onBlur` handler doing the same job correctly, so the `onChange` write is
 redundant as well as expensive.
 
-### L-08 · "Switch to Overriding Rule" does almost nothing → **R-11**
+### L-08 · "Switch to Overriding Rule" did almost nothing · *resolved 2026-09-02, R-11 done*
 The button is live and user-visible
 ([FaviconEditor.tsx:398](../components/FaviconEditor.tsx#L398)) but its handler only sets the
 scope and `manualUrl`, and `manualUrl` is unused in popup mode. Its own body carries the
 half-finished reasoning as comments. Clicking it appears to do nothing.
 
-### L-09 · Badge/Overlay silently no-ops on a site with no favicon → **R-06**
+### L-09 · Badge/Overlay silently no-opped on a site with no favicon · *resolved 2026-09-02, R-06 done*
 The preview effect returns early when `sourceIconUrl` is empty, so `previewUrl` stays null and
 `handleApply` returns without feedback ([BadgeSection.tsx:103](../components/editor/BadgeSection.tsx#L103)).
 **Workaround**: set an emoji or uploaded icon first, then badge it.
 
-### L-10 · `createdAt` is overwritten on every save → **R-26**
+### L-10 · `createdAt` was overwritten on every save · *resolved 2026-09-02, R-26 done*
 `handleSave` always sets `createdAt: Date.now()`, so the rules list's "Created" column is really
 "last modified". Harmless today, but it destroys the only ordering signal, which L-04's fix may
 want to use.
@@ -123,7 +123,7 @@ Invisible without React types, which is exactly why L-29 matters.
 
 ## 4. Runtime and robustness
 
-### L-13 · The content script can be initialised twice → **R-08**
+### L-13 · The content script could be initialised twice · *resolved 2026-09-02, R-08 done*
 `content.js` is both declared in the manifest and injected on demand by
 `ensureContentScriptReady` (ADR-008). The `PING` guard usually prevents a double-inject, but a
 still-loading tab that has not yet registered its listener will fail the ping and receive a second
@@ -135,7 +135,7 @@ no `window.__fcu_loaded` latch.
 silent. With 100 tabs open, one rule save touches 100 tabs, including discarded ones, which it
 may wake. It does not check whether a tab could even be affected by the change.
 
-### L-15 · OS detection is implemented twice, two different ways → **R-10**
+### L-15 · OS detection was implemented twice, two different ways · *resolved 2026-09-02, R-10 done*
 `chrome.runtime.getPlatformInfo()` in [background.ts:20](../background.ts#L20) versus a
 `navigator.userAgent` regex in [FaviconEditor.tsx:18](../components/FaviconEditor.tsx#L18). They
 can disagree (the UA test also catches Android, then explicitly excludes it), and a disagreement
@@ -158,36 +158,28 @@ late), deleting a rule removes our link and restores nothing
 ([content.ts:176](../content.ts#L176)). The tab falls back to whatever Chrome can find, often
 nothing, until reload.
 
-### L-19 · `RESET_ICON` has a handler and no sender → **R-18**
+### L-19 · `RESET_ICON` had a handler and no sender · *resolved 2026-09-02, removed*
 [content.ts:258](../content.ts#L258) implements a page-reloading reset that nothing in the
 codebase ever sends. Dead protocol surface.
 
 ---
 
-## 5. Verified dead code → **R-18**
+## 5. Verified dead code · *removed 2026-09-02, R-18 done*
 
-Confirmed unreferenced across every `.ts`/`.tsx`/`.html`/config file in the repo (excluding
-`node_modules` and the build output) on 2026-09-02:
+The inventory that used to sit here (`generateFavicon`, `GenerateFaviconOptions`, `Shape`,
+`EXTENSION_WIDTH`/`HEIGHT`, `DEFAULT_EMOJIS`, the unused `TabInfo` import, the duplicate
+`TabInfo` interface, and the `RESET_ICON` handler) has been deleted. Each was confirmed
+unreferenced across every `.ts`, `.tsx`, `.html` and config file in the repo first.
 
-| Symbol | Location | Note |
-|---|---|---|
-| `generateFavicon()` | [utils/canvas.ts:80](../utils/canvas.ts#L80) | Superseded by `BadgeSection`. Its own `shape` option is destructured and never read, and it hardcodes red/white/bottom |
-| `GenerateFaviconOptions` | [utils/canvas.ts:3](../utils/canvas.ts#L3) | Only consumed by `generateFavicon` |
-| `Shape` type | [types.ts:2](../types.ts#L2) | Only consumed by `GenerateFaviconOptions`; `'circle' \| 'banner' \| 'border'` were never implemented anywhere |
-| `EXTENSION_WIDTH`, `EXTENSION_HEIGHT` | [constants.ts:3-4](../constants.ts#L3) | The popup is sized by CSS in `index.html` instead |
-| `DEFAULT_EMOJIS` | [constants.ts:17](../constants.ts#L17) | Superseded by `EMOJI_LIBRARY` |
-| `isValidBadgeText()` | [utils/validation.ts:30](../utils/validation.ts#L30) | Never called; the badge input relies on `maxLength={3}` alone, so the rule is unenforced on imported data |
-| `RESET_ICON` handler | [content.ts:258](../content.ts#L258) | No sender, see L-19 |
-| `TabInfo` import | [utils/messaging.ts:1](../utils/messaging.ts#L1) | Imported, never used in the file |
-| `TabInfo` duplicate | [utils/storage.ts:198](../utils/storage.ts#L198) | Second, divergent definition of the interface already in [types.ts:52](../types.ts#L52) |
+Two things in that list were deliberately **not** deleted, and should not be:
 
-Table name: **verified-dead-code**
+- `isValidBadgeText()` in [../utils/validation.ts](../utils/validation.ts) is still unused. It
+  should be **wired up** by R-07 (import validation), because the 3 character badge rule is
+  currently enforced only by `maxLength` on the editor input and not at all on imported data.
+- `switchToConflictRule` was never dead. It was L-08, now fixed.
 
-**Not dead, despite appearances**: `switchToConflictRule` is wired to a live button (L-08, fix or
-remove it, do not classify it as unused); `normalizeImageDataUrl`, `drawOverlay`, `drawBadge`,
-`isValidRegex`, `findConflictingRule` and every editor hand-off function are all in active use.
-
----
+The general lesson: `switchToConflictRule` looked exactly as unused as the rest from a
+call-graph glance, but was wired to a visible button. Confirm against the JSX, not just imports.
 
 ## 6. Platform and reach
 
@@ -204,7 +196,7 @@ No `_locales`, every string inline in TSX. 983 users with no localisation ceilin
 per-item limit cannot hold a PNG data URL (ADR-004). Real sync needs a different icon-storage
 design, not a one-line change. Export/import JSON is the current answer.
 
-### L-23 · Type safety is opted out at the Chrome boundary too → **R-19**
+### L-23 · Type safety was opted out at the Chrome boundary · *resolved 2026-09-02, R-19 done*
 Separate from L-29, and narrower.
 `declare const chrome: any` appears in [content.ts:3](../content.ts#L3) and
 [utils/storage.ts:5](../utils/storage.ts#L5) even though `@types/chrome` is installed and listed
@@ -232,6 +224,6 @@ store's documented sizes are 440×280 for the small tile and 1400×560 for the m
 `icons/FaviconChangerLogo.png` is 497×502 and 231 KB, 40% of the entire packaged extension, and
 is only ever drawn at `w-8 h-8` (popup header) or `w-10 h-10` (options header).
 
-### L-28 · Build config carries a removed feature's scar → **R-29**
+### L-28 · Build config carried a removed feature's scar · *resolved 2026-09-02, R-29 done*
 `vite.config.ts` still calls `loadEnv` into an unused `env` and keeps an empty `define: {}` with a
 comment about removed Gemini API keys.

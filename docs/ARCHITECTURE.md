@@ -155,9 +155,12 @@ worker, and the content script never initiates a message.
 |---|---|---|---|
 | `PING` | `utils/messaging.ensureContentScriptReady` | `content.ts` | Replies `{ok:true}` to prove the script is live |
 | `RulesUpdated` | `utils/storage.notifyTabs` | `content.ts` | Re-runs `applyRule()` |
-| `RESET_ICON` | *nobody, see LIMITATIONS.md* | `content.ts` | Disconnects the observer and reloads the page |
-
 Table name: **message-protocol**
+
+A third type, `RESET_ICON`, was handled here but never sent by anything; it was removed on
+2026-09-02. The content script also carries a `window.__fcuContentLoaded` latch so a second
+injected copy does not register a second listener (both would call `sendResponse`) or a second
+observer.
 
 `ensureContentScriptReady` exists because the manifest-declared content script may not be listening
 yet (or at all, on a page loaded before an update). It pings, and on silence injects `content.js`

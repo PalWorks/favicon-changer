@@ -20,7 +20,8 @@ Defined in [types.ts](../types.ts). One row of user intent: "on pages matching X
 | `originalUrl` | The site's own icon before editing | Kept so Badge/Overlay can re-composite from the clean source instead of stacking badges on badges |
 | `sourceType` | `'emoji' \| 'upload' \| 'url' \| 'custom'` | Which editor section produced it; drives which accordion auto-opens on edit |
 | `metadata` | Editor state to rehydrate | Emoji char, badge text/colours/position, overlay colour/opacity, image fit mode |
-| `createdAt` | `Date.now()` | Display only. **Overwritten on every save**, so it is really "last saved at" |
+| `createdAt` | `Date.now()` | First save. Preserved across later edits |
+| `updatedAt?` | `Date.now()` | Last save. Absent on rules written before this field existed |
 
 Table name: **favicon-rule-fields**
 
@@ -45,14 +46,18 @@ despite what the settings copy implies. See [LIMITATIONS.md](LIMITATIONS.md).
 ## 2. Match types and precedence
 
 `findBestRule(currentUrl, currentDomain, rules)` in [utils/matcher.ts](../utils/matcher.ts)
-evaluates in a fixed order and returns the **first** rule found at the highest-priority tier
-that has any match. Tiers are tried strictly in sequence; a hit at a tier ends the search.
+**scores every matching rule and returns the highest.** The score is the match type's tier rank
+multiplied past any possible matcher length, plus the matcher length itself as a within-tier
+tie-break. So a more specific *kind* of match always beats a less specific one, and within one
+kind the longer (more specific) matcher wins. An exact tie keeps the earlier rule, which makes
+the result stable and insertion-ordered.
 
-| Priority | `matchType` | Compared against | Semantics |
+| Tier rank | `matchType` | Compared against | Semantics |
 |---|---|---|---|
-| 1 (highest) | `exact_url` | `window.location.href` | Byte-exact string equality, query string and hash included |
+| 4 (highest) | `exact_url` | `window.location.href` | Byte-exact string equality, query string and hash included |
+| 3 | *reserved* | | Reserved for `prefix` (ROADMAP R-01), which must outrank regex |
 | 2 | `regex` | `window.location.href` | `new RegExp(matcher).test(url)`, unanchored, no flags |
-| 3 (lowest) | `domain` | `window.location.hostname` | `hostname === matcher \|\| hostname.endsWith('.' + matcher)` |
+| 1 (lowest) | `domain` | `window.location.hostname` | `hostname === matcher \|\| hostname.endsWith('.' + matcher)` |
 
 Table name: **match-precedence**
 
@@ -67,10 +72,15 @@ Consequences that surprise people:
 - **`regex` matches the whole URL, unanchored.** `google` as a pattern matches any URL containing
   the substring. Invalid patterns, and patterns over 2000 characters, are skipped with a warning
   rather than throwing.
-- **Within one tier, the first rule wins**: in `Object.values(rules)` order, which is insertion
-  order, i.e. the oldest rule. Specificity is *not* considered inside a tier, so with both
-  `google.com` and `docs.google.com` as domain rules, whichever was created first wins on
-  `docs.google.com`. This is a known defect, tracked in [LIMITATIONS.md](LIMITATIONS.md).
+- **Within one tier, the longer matcher wins.** With domain rules for both `google.com` and
+  `docs.google.com`, the `docs.google.com` rule wins on a docs URL, and `google.com` still
+  applies to every other subdomain. Until 2026-09-02 this was creation order instead, so the
+  oldest rule won and users read the result as random.
+- **Tier rank always dominates length.** The multiplier is larger than any allowed matcher
+  (regex patterns are capped at 2000 characters, hostnames at 253), so a long matcher can never
+  promote a rule out of its tier.
+- **An unrecognised `matchType` never matches**, rather than throwing. Hand-edited or imported
+  storage can contain one.
 
 ### Resolution order at runtime
 
@@ -84,6 +94,10 @@ otherwise                -> restore the page's original icon if we had changed i
 ```
 
 ### Conflict warning
+
+Note this detector was **not** widened when scoring landed: it still only looks for an
+`exact_url` or `regex` rule shadowing a domain-scoped edit, so it does not warn when a longer
+domain rule shadows a shorter one. Tracked as ROADMAP R-35.
 
 `findConflictingRule(targetUrl, currentScope, rules)` powers the orange "Rule Conflict Detected"
 banner. It only fires in one direction: when the user is editing a **domain**-scoped rule while

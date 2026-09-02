@@ -32,8 +32,22 @@ Table name: **product-snapshot**
 |---|---|---|
 | R-00 | 2026-09-02 | React types installed; `Button` gained the missing `size` prop that 11 call sites already passed. `tsc --noEmit` now clean and meaningful |
 | R-13 | 2026-09-02 | Local `pre-push` hook running typecheck + tests + build in ~9 s. No GitHub Actions workflow, by decision (ADR-012) |
+| R-04 | 2026-09-02 | Matching scores every candidate: most specific wins, not the oldest. 8 new tests, 28 total |
+| R-03 | 2026-09-02 | Editing a regex rule no longer downgrades and duplicates it. Verified end to end |
+| R-11 | 2026-09-02 | The conflict banner's button now acts, or sends you to Settings when it cannot |
+| R-05 | 2026-09-02 | Fallback favicon commits on blur, not per keystroke. 20 chars now cost 0 writes, was 20 writes plus 20 tab broadcasts |
+| R-06 | 2026-09-02 | Badge tool explains an unbadgeable page and disables Apply instead of failing silently |
+| R-08 | 2026-09-02 | `window.__fcuContentLoaded` latch stops a second injected copy double-registering |
+| R-10 | 2026-09-02 | One `popupClosesOnFileDialog()` helper replaces the getPlatformInfo/user-agent split |
+| R-18 | 2026-09-02 | Verified dead code removed. `isValidBadgeText` kept back for R-07 to wire up |
+| R-19 | 2026-09-02 | `declare const chrome: any` gone from both files; @types/chrome now genuinely enforced |
+| R-26 | 2026-09-02 | `createdAt` preserved, `updatedAt` added, list shows both |
+| R-29 | 2026-09-02 | Unused `loadEnv` and the empty `define` block gone from `vite.config.ts` |
 
 Table name: **completed-items**
+
+**Remaining in Tier 1 for v1.4.0**: R-01 (prefix matching), R-02 (regex UI), R-07 (import
+hardening), R-12 (icon and store-asset dimensions).
 
 ---
 
@@ -135,14 +149,14 @@ The engine is done ([utils/matcher.ts:11](utils/matcher.ts#L11)); only the UI is
   open tabs the pattern would match as a confidence check.
 - **Acceptance**: a regex rule can be created, edited and deleted without touching a JSON file.
 
-### R-03 · Fix regex-rule corruption on edit · **S** · blocks R-02
+### R-03 · Fix regex-rule corruption on edit · **S** · ✅ done 2026-09-02
 Loading a regex rule into the options editor converts it to `exact_url` and saves a duplicate
 (L-03). Fix the coercion at [FaviconEditor.tsx:94](components/FaviconEditor.tsx#L94) and the
 existing-rule lookup at [line 190](components/FaviconEditor.tsx#L190), match on `id` when
 editing a known rule rather than on `matcher` + `matchType`.
 **Acceptance**: edit a regex rule's icon, and exactly one rule exists afterwards, still regex.
 
-### R-04 · Most-specific match wins · **M** · do with R-01
+### R-04 · Most-specific match wins · **M** · ✅ done 2026-09-02
 Replace the tier-by-tier `Array.find` (L-04) with a score-and-pick-max over all matching rules:
 
 | Tier | Base score | Tie-break |
@@ -179,24 +193,24 @@ re-exporting*. Needed for a clean listing update alongside the release.
 
 ## Tier 2: correctness bugs (no new features)
 
-### R-05 · Stop the fallback-URL field writing on every keystroke · **S**
+### R-05 · Stop the fallback-URL field writing on every keystroke · **S** · ✅ done 2026-09-02
 [GlobalSettings.tsx:69](components/options/GlobalSettings.tsx#L69) persists and broadcasts to
 every tab per character typed (L-07). The `onBlur` handler already does this correctly, make the
 input local state and delete the `onChange` write.
 
-### R-06 · Badge/Overlay must not fail silently · **S**
+### R-06 · Badge/Overlay must not fail silently · **S** · ✅ done 2026-09-02
 When the page has no favicon, the preview never renders and **Apply** does nothing (L-09). Show
 "This page has no icon to badge, set an emoji or upload one first", and disable Apply. Also
 replace the two `console.error` calls in
 [BadgeSection.tsx](components/editor/BadgeSection.tsx#L85) with `logger.error` so the failure
 reaches the support log.
 
-### R-08 · Guard the content script against double-init · **S**
+### R-08 · Guard the content script against double-init · **S** · ✅ done 2026-09-02
 Add a `window.__fcu_loaded` latch at the top of [content.ts](content.ts) (L-13). Without it, a
 ping that races a still-loading tab yields two observers, two intervals and two message
 listeners in one context.
 
-### R-11 · Finish or remove "Switch to Overriding Rule" · **S**
+### R-11 · Finish or remove "Switch to Overriding Rule" · **S** · ✅ done 2026-09-02
 The button is live and effectively inert (L-08). Either load the conflicting rule into the editor
 properly, or delete the button. Do not leave a visible control that does nothing.
 
@@ -205,7 +219,7 @@ One rule save pings every open tab and injects where silent (L-14). Skip discard
 message only tabs whose URL could be affected by the changed rule, the matcher is already
 available to decide that.
 
-### R-10 · One OS-detection source of truth · **S**
+### R-10 · One OS-detection source of truth · **S** · ✅ done 2026-09-02
 `getPlatformInfo()` versus a UA regex, in two files, able to disagree (L-15). Resolve once in the
 service worker, store the verdict, and have the UI read it.
 
@@ -217,6 +231,15 @@ confirmation. The current mismatch reads as the extension going rogue (L-06).
 ### R-20 · Fix log-write races · **S**
 Batch or queue the `debug_logs` read-modify-write (L-16). Lost lines are worst exactly when the
 log matters.
+
+---
+
+### R-35 · Widen the conflict detector to same-tier shadowing · **S** · *new, from R-04*
+Now that a longer domain matcher beats a shorter one, a domain rule can be shadowed by another
+domain rule, which `findConflictingRule` does not detect: it still only looks for an `exact_url`
+or `regex` rule shadowing a domain-scoped edit. Scoring the rule being edited against every
+other rule would cover every shadowing case with one code path, and would let the banner name
+the winner instead of describing its type.
 
 ---
 
@@ -245,7 +268,7 @@ In value order: `utils/validation.ts`; the storage migration latch; `normalizeIm
 instance**, which would lock ADR-001 into the suite where it belongs. See
 [docs/TESTING.md](docs/TESTING.md).
 
-### R-18 · Delete verified dead code · **S**
+### R-18 · Delete verified dead code · **S** · ✅ done 2026-09-02
 The full verified inventory is table **verified-dead-code** in
 [docs/LIMITATIONS.md](docs/LIMITATIONS.md): `generateFavicon` + `GenerateFaviconOptions` +
 `Shape`, `EXTENSION_WIDTH`/`HEIGHT`, `DEFAULT_EMOJIS`, the unused `TabInfo` import and the
@@ -253,7 +276,7 @@ duplicate `TabInfo` interface, and the `RESET_ICON` handler. **Two exceptions**:
 is unused but should be *wired up* in R-07 rather than deleted, and `switchToConflictRule` is not
 dead, it is R-11.
 
-### R-19 · Restore type safety at the Chrome boundary · **S**
+### R-19 · Restore type safety at the Chrome boundary · **S** · ✅ done 2026-09-02
 Drop `declare const chrome: any` from [content.ts:3](content.ts#L3) and
 [storage.ts:5](utils/storage.ts#L5); `@types/chrome` is already installed and configured (L-23).
 Expect real errors to surface, that is the point.
@@ -264,14 +287,14 @@ and effects that must not fire in the wrong combination (ADR-010). R-01 and R-02
 to it. Extract `useFaviconRuleEditor()` **before** Tier 1 if it can be done cheaply, or
 immediately after, not in the middle.
 
-### R-29 · Clean the build config · **S**
+### R-29 · Clean the build config · **S** · ✅ done 2026-09-02
 Remove the unused `loadEnv`/`env` and the empty `define: {}` in `vite.config.ts` (L-28).
 
 ### R-16 · Dependency hygiene · **S**
 Add `npm audit --production` to CI and enable Dependabot. Two runtime dependencies makes this
 cheap to keep green (threat 5).
 
-### R-26 · Add `updatedAt`, stop overwriting `createdAt` · **S**
+### R-26 · Add `updatedAt`, stop overwriting `createdAt` · **S** · ✅ done 2026-09-02
 The rules list's "Created" column is really last-modified (L-10).
 
 ---
