@@ -83,15 +83,30 @@ export const ensureContentScriptReady = async (tabId: number, retries = 3): Prom
 };
 
 /**
- * Sends a message to a tab, ensuring the content script is loaded first.
+ * Sends a message to a tab.
+ *
+ * `inject` controls whether a missing content script is worth injecting. It is
+ * right for the tab the user is looking at, where the change should be visible
+ * immediately. It is wrong for a broadcast across every open tab: injection
+ * costs a scripting call and up to three retries per tab, and a tab without a
+ * live content script will read the new rules on its next load anyway.
  */
-export const sendMessageToTab = async (tabId: number, message: any): Promise<void> => {
-    const isReady = await ensureContentScriptReady(tabId);
-    if (isReady) {
-        try {
-            await chrome.tabs.sendMessage(tabId, message);
-        } catch (e) {
+export const sendMessageToTab = async (tabId: number, message: any, options: { inject?: boolean } = {}): Promise<void> => {
+    const { inject = true } = options;
+
+    if (inject) {
+        const isReady = await ensureContentScriptReady(tabId);
+        if (!isReady) return;
+    }
+
+    try {
+        await chrome.tabs.sendMessage(tabId, message);
+    } catch (e) {
+        if (inject) {
             logger.error('Failed to send message even after injection:', e);
+        } else {
+            // Ordinary: no content script listening in that tab yet.
+            logger.debug('No content script in tab, it will pick up rules on next load:', tabId);
         }
     }
 };

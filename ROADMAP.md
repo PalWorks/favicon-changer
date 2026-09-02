@@ -50,6 +50,7 @@ changes.
 | R-16 | Dependency hygiene | S | `npm audit` in the pre-push hook, production scope blocking. Fixed 6 high-severity dev advisories (vite 6.4.1 to 6.4.3) |
 | R-37 | Undecodable icon showed a broken glyph | S | `FaviconPreview` checks the element, not just the events (L-31) |
 | R-38 | Dev server bound to `0.0.0.0` | S | Localhost only; `npm run dev -- --host` is the opt-in (L-32) |
+| R-09 | `notifyTabs` fan-out | M | Skips discarded tabs, and only injects into the active tab. The rest are pinged and pick up rules on next load |
 
 Table name: **roadmap-done**
 
@@ -57,10 +58,10 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-14 | Close the test gaps | M | **pending** | 99 tests now, but `validation`, the storage migration and `normalizeImageDataUrl` are still untested, and nothing locks ADR-001 |
-| R-09 | `notifyTabs` fan-out | M | **pending** | One rule save still pings every open tab, discarded ones included |
+| R-14 | Close the test gaps | M | **mostly done** | 165 tests now. What is left needs the `jsdom` devDependency, so it is a decision, not just work |
 | R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
 | R-32 | Rules list search and sort | M | **pending** | Pause is done (R-33); search, sort and bulk delete are not |
+| R-39 | Store screenshots | S | **pending** | Blocks a listing update, and needs real UI captures rather than generated images |
 
 Table name: **roadmap-next**
 
@@ -80,7 +81,6 @@ browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (A
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
 | R-17 | Security contact | 5 | S | No inbound vulnerability channel |
 | R-36 | Icon artwork fills 122x122 of its 128x128 canvas | 4 | S | Chrome suggests ~96x96 so icons look consistent side by side. A branding call, not a rejection risk |
-| R-39 | No store screenshots exist | 4 | S | The listing requires at least one at 1280x800 or 640x400. Blocks a listing update, needs real UI captures |
 | R-40 | Dependabot | 3 | S | The audit gate is local only, so nothing tells you about a new advisory until you next push |
 
 Table name: **roadmap-pending**
@@ -312,10 +312,20 @@ listeners in one context.
 The button is live and effectively inert (L-08). Either load the conflicting rule into the editor
 properly, or delete the button. Do not leave a visible control that does nothing.
 
-### R-09 · Narrow the `notifyTabs` fan-out · **M**
+### R-09 · Narrow the `notifyTabs` fan-out · **M** · ✅ done 2026-09-02
 One rule save pings every open tab and injects where silent (L-14). Skip discarded tabs, and
 message only tabs whose URL could be affected by the changed rule, the matcher is already
 available to decide that.
+
+**Outcome.** `sendMessageToTab` grew an `inject` flag, and `notifyTabs` now sets it only for the
+**active** tab of each window: that is the tab the user is looking at, where the change has to be
+visible immediately. Discarded tabs are skipped entirely, since they have no live content script
+and re-run it when next activated. Every other tab is pinged without injection and reads the new
+rules on its next load.
+
+Filtering by "could this rule affect this URL" was considered and rejected: it needs a diff of
+the old and new rule sets to be correct (a deleted rule affects the tabs it *used* to match), and
+the injection cost was the actual problem, not the message.
 
 ### R-10 · One OS-detection source of truth · **S** · ✅ done 2026-09-02
 `getPlatformInfo()` versus a UA regex, in two files, able to disagree (L-15). Resolve once in the
@@ -360,10 +370,20 @@ type error.
 an outside contributor. If that becomes relevant, add a single-job workflow limited to PRs
 against `main`. See ADR-012.
 
-### R-14 · Close the test gaps · **M**
+### R-14 · Close the test gaps · **M** · mostly done 2026-09-02
 In value order: `utils/validation.ts`; the storage migration latch; `normalizeImageDataUrl`;
 `isRestrictedUrl`; then a jsdom test asserting `updateFavicon` mutates the **same element
 instance**, which would lock ADR-001 into the suite where it belongs. See
+[docs/TESTING.md](docs/TESTING.md).
+
+**Outcome.** 165 tests across 7 files, up from 20 in one file. New: `validation.test.ts`,
+`patterns.test.ts`, `importRules.test.ts`, `canvas.test.ts` (`normalizeImageDataUrl`),
+`messaging.test.ts` (`isRestrictedUrl`), and `storage.test.ts` covering the v1 migration, its
+latch, settings defaults and storage usage.
+
+**Still open, and it is the most valuable one**: the jsdom lock on ADR-001. It needs the `jsdom`
+devDependency, which is a decision to take rather than work to do. The other remaining gaps
+(messaging paths, logger batching, canvas drawing) are listed in
 [docs/TESTING.md](docs/TESTING.md).
 
 ### R-18 · Delete verified dead code · **S** · ✅ done 2026-09-02

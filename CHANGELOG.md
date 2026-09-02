@@ -94,6 +94,10 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 - Em dashes removed from the three user-facing strings that contained them.
 
 ### Changed
+- **Saving a rule no longer touches every open tab.** It pinged all of them and injected a content
+  script into any that did not answer, so one save could reach a hundred tabs and wake discarded
+  ones. Now discarded tabs are skipped, only the tab you are looking at is worth an injection, and
+  the rest pick up the change on their next load.
 - **The packaged extension is a third smaller**, 577 KB down to 381 KB. The 497px logo master
   was being shipped for a header drawn at 32 to 40 CSS pixels; a 160px version ships instead and
   the master moved to `store-assets/masters/`.

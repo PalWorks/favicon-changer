@@ -6,9 +6,9 @@ Extension code splits cleanly into three testability tiers, and the strategy fol
 
 | Tier | Files | How it is verified | Status |
 |---|---|---|---|
-| Pure logic | `utils/matcher.ts`, `utils/validation.ts` | Vitest in plain Node, fast, deterministic | matcher done, validation untested |
-| Browser-API logic | `utils/storage.ts`, `utils/messaging.ts`, `utils/logger.ts` | Vitest with a stubbed `chrome` global | untested |
-| Canvas + DOM behaviour | `utils/canvas.ts`, `content.ts`, all components | Manual, unpacked, in a real browser | manual only |
+| Pure logic | `matcher`, `validation`, `patterns`, `importRules`, `canvas` string helpers | Vitest in plain Node, fast, deterministic | covered |
+| Browser-API logic | `storage` (migration, usage), `messaging` (`isRestrictedUrl`) | Vitest with a stubbed `chrome` global | migration and URL gating covered; the messaging and logging paths are not |
+| Canvas + DOM behaviour | `utils/canvas.ts` drawing, `content.ts`, all components | Manual, unpacked, in a real browser | manual only |
 
 Table name: **test-tiers**
 
@@ -16,9 +16,26 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **20 tests, 1 file** ([utils/matcher.test.ts](../utils/matcher.test.ts)),
-covering every precedence tier, subdomain behaviour, invalid-regex handling and the conflict
-detector. Run time ~300 ms.
+Current coverage: **165 tests across 7 files**, run time under a second.
+
+| File | Covers |
+|---|---|
+| `matcher.test.ts` | Every precedence tier and pair, within-tier specificity, prefix semantics, paused rules, the conflict detector, `patternMatches` |
+| `importRules.test.ts` | Whole-file rejects, per-rule validation, scheme allow-list, field rebuilding, metadata cleaning |
+| `validation.test.ts` | Regex and URL validity, the ReDoS length cap, the icon scheme allow-list, byte estimation |
+| `patterns.test.ts` | Regex escaping, prefix suggestion (including the Sheets case and `file:`), anchored regex suggestion |
+| `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
+| `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
+| `storage.test.ts` | The v1 format migration, its latch, settings defaults, storage usage |
+
+Table name: **test-files**
+
+The stubbing pattern for `storage.test.ts` is worth knowing: `chrome` must be stubbed **before**
+the module is imported, because `constants.ts` computes `IS_DEV` from the presence of
+`chrome.storage` at module-evaluation time and `storage.ts` silently swaps in `localStorage`
+without it. Hence `vi.stubGlobal` at the top of the file, then `await import('./storage')`. The
+stub also has to support both the callback and promise forms of `chrome.storage.local.get`,
+because `logger.ts` uses one and `storage.ts` the other.
 
 ---
 
@@ -122,15 +139,18 @@ broken before, in the order they broke:
 
 ## Gaps worth closing, highest value first
 
-1. `utils/validation.ts`, pure and trivially testable, currently zero tests.
-2. The storage migration in `getStorageData()`, old-format input, latch behaviour, and the
-   "already migrated" short-circuit; needs a `chrome.storage.local` stub.
-3. `normalizeImageDataUrl()`, pure string/`atob` work, no canvas needed. Test SVG-as-PNG repair,
-   plain PNG passthrough, malformed data URLs, non-data URLs.
-4. `isRestrictedUrl()`, pure, and the gate protecting every injection call site.
-5. A `jsdom` suite for `content.ts`'s `updateFavicon`, asserting that the *same element instance*
-   is mutated rather than replaced would lock ADR-001 into the test suite, which is where it
-   belongs.
+1. **A `jsdom` suite for `content.ts`'s `updateFavicon`.** Asserting that the *same element
+   instance* is mutated rather than replaced would lock ADR-001 into the test suite, which is
+   where it belongs: it is the one behaviour that breaks silently, only on background tabs, and
+   only in a real browser. This needs the `jsdom` devDependency, so it is a dependency decision
+   rather than just work (ROADMAP R-14).
+2. **The messaging paths**: `ensureContentScriptReady`'s ping-then-inject-then-retry, and
+   `notifyTabs`'s decision about which tabs to touch. Both need a `chrome.tabs` stub, which
+   `storage.test.ts` already demonstrates.
+3. **`logger.ts` batching**: that concurrent writers do not lose entries, and that `pagehide`
+   flushes. Needs fake timers.
+4. **Canvas drawing** (`drawBadge`, `drawOverlay`, `compressFaviconDataUrl`): needs a canvas
+   implementation, so it is the most expensive and the least likely to regress silently.
 
 Tests, the type check and the build all run on `git push` (ADR-012). They do **not** run on a
 pull request from a machine without the hook installed, which is the one gap left by not having a

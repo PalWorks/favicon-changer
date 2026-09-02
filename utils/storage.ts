@@ -204,20 +204,44 @@ export const importRulesFromJson = async (jsonString: string): Promise<ImportRep
 
 import { sendMessageToTab, isRestrictedUrl } from './messaging';
 
+/**
+ * Tells open tabs that the rules changed.
+ *
+ * Deliberately cheap about it. This used to ping every tab and inject a content
+ * script into any that did not answer, so one rule save touched every open tab,
+ * discarded ones included, and could wake them (LIMITATIONS L-14). Now:
+ *
+ *   - restricted URLs are skipped, as they always were
+ *   - discarded tabs are skipped: they have no live content script and re-run it
+ *     when the user next activates them, so there is nothing to update
+ *   - only the active tab of each window is worth an injection if its content
+ *     script is missing, because that is the one the user is looking at. The
+ *     rest are pinged without injection and will read the new rules on their
+ *     next load.
+ */
 export const notifyTabs = () => {
-  if (!IS_DEV) {
-    chrome.tabs.query({}, (tabs: any[]) => {
-      if (chrome.runtime.lastError) {
-        logger.warn('[Storage] tabs.query failed:', chrome.runtime.lastError.message);
+  if (IS_DEV) return;
+
+  chrome.tabs.query({}, (tabs: any[]) => {
+    if (chrome.runtime.lastError) {
+      logger.warn('[Storage] tabs.query failed:', chrome.runtime.lastError.message);
+      return;
+    }
+
+    let notified = 0;
+    let skipped = 0;
+
+    (tabs || []).forEach(tab => {
+      if (!tab.id || isRestrictedUrl(tab.url) || tab.discarded) {
+        skipped++;
         return;
       }
-      tabs.forEach(tab => {
-        if (tab.id && !isRestrictedUrl(tab.url)) {
-          sendMessageToTab(tab.id, { type: 'RulesUpdated' });
-        }
-      });
+      notified++;
+      sendMessageToTab(tab.id, { type: 'RulesUpdated' }, { inject: !!tab.active });
     });
-  }
+
+    logger.debug('[Storage] Notified tabs of rule change', { notified, skipped });
+  });
 };
 
 // --- Tab Info ---

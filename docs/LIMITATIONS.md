@@ -146,10 +146,12 @@ still-loading tab that has not yet registered its listener will fail the ping an
 copy in the same context, two MutationObservers, two intervals, two message listeners. There is
 no `window.__fcu_loaded` latch.
 
-### L-14 · `notifyTabs` fans out to every tab → **R-09**
-[storage.ts:184](../utils/storage.ts#L184) queries all tabs and pings each one, injecting where
-silent. With 100 tabs open, one rule save touches 100 tabs, including discarded ones, which it
-may wake. It does not check whether a tab could even be affected by the change.
+### L-14 · `notifyTabs` fanned out to every tab · *resolved 2026-09-02, R-09 done*
+**Fixed.** `sendMessageToTab` takes an `inject` flag, and `notifyTabs` sets it only for the active
+tab of each window. Discarded tabs are skipped entirely; every other tab is pinged without
+injection and reads the new rules on its next load. Filtering by "could this rule affect this
+URL" was rejected: doing it correctly needs a diff of the old and new rule sets, because a
+deleted rule affects the tabs it used to match, and the injection cost was the real problem.
 
 ### L-15 · OS detection was implemented twice, two different ways · *resolved 2026-09-02, R-10 done*
 `chrome.runtime.getPlatformInfo()` in [background.ts:20](../background.ts#L20) versus a
