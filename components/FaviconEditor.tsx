@@ -3,7 +3,7 @@ import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, op
 import { logger } from '../utils/logger';
 import { findConflictingRule } from '../utils/matcher';
 
-import { FaviconRule, TabInfo } from '../types';
+import { FaviconRule, MatchType, TabInfo } from '../types';
 import { Button } from './Button';
 import { FaviconPreview } from './FaviconPreview';
 import { UploadSection } from './editor/UploadSection';
@@ -36,6 +36,12 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     // Inputs
     const [manualUrl, setManualUrl] = useState('');
     const [applyScope, setApplyScope] = useState<'domain' | 'exact_url'>('exact_url');
+    // The two scope buttons can only express 'domain' and 'exact_url'. When the
+    // rule being edited uses a type they cannot represent (currently 'regex',
+    // which has no UI yet), its real type is held here so saving preserves it
+    // instead of silently rewriting the rule as an exact-URL match. Cleared the
+    // moment the user picks a scope explicitly.
+    const [preservedMatchType, setPreservedMatchType] = useState<MatchType | null>(null);
     const [fileAccess, setFileAccess] = useState(true);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +72,13 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         })();
     }, [mode, context]);
 
+    // Picking a scope by hand is an explicit choice, so it discards any
+    // preserved match type (see preservedMatchType above).
+    const selectScope = (scope: 'domain' | 'exact_url') => {
+        setPreservedMatchType(null);
+        setApplyScope(scope);
+    };
+
     // Action popup can't host a native file dialog without closing itself, so the
     // "Browse" action hands the current target off to a standalone window.
     const requestExpandedUpload = async () => {
@@ -91,7 +104,16 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         if (initialRule) {
             logger.debug('Loading initial rule', initialRule);
             setManualUrl(initialRule.matcher);
-            setApplyScope(initialRule.matchType === 'regex' ? 'exact_url' : initialRule.matchType);
+            if (initialRule.matchType === 'domain' || initialRule.matchType === 'exact_url') {
+                setApplyScope(initialRule.matchType);
+                setPreservedMatchType(null);
+            } else {
+                // e.g. a regex rule, reachable today only via rules import.
+                // Show the closest scope, but remember the real type so the
+                // save below does not downgrade the rule.
+                setApplyScope('exact_url');
+                setPreservedMatchType(initialRule.matchType);
+            }
 
             // Auto-expand section based on sourceType or metadata
             if (initialRule.sourceType === 'emoji') {
@@ -121,6 +143,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             logger.debug('Resetting editor for new rule');
             setManualUrl('');
             setApplyScope('exact_url');
+            setPreservedMatchType(null);
             setOpenSection(null);
             setCurrentTab({ url: '', domain: '', favIconUrl: '' });
         }
@@ -186,13 +209,21 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                 throw new Error('No target URL specified.');
             }
 
-            const matcher = applyScope === 'domain' ? targetDomain : targetUrl;
-            const existingRule = rules.find(r => r.matcher === matcher && r.matchType === applyScope);
+            const matchType: MatchType = preservedMatchType ?? applyScope;
+            const matcher = matchType === 'domain' ? targetDomain : targetUrl;
+
+            // When a known rule is loaded in the editor, keep editing THAT rule.
+            // Looking it up by matcher + matchType used to miss any rule whose
+            // type the editor had coerced, so the save created a duplicate under
+            // a fresh id and left the broken original behind (LIMITATIONS L-03).
+            const existingRule = initialRule
+                ? rules.find(r => r.id === initialRule.id)
+                : rules.find(r => r.matcher === matcher && r.matchType === matchType);
 
             const newRule: FaviconRule = {
                 id: existingRule?.id || generateId(),
                 matcher,
-                matchType: applyScope,
+                matchType,
                 faviconUrl: url,
                 originalUrl: existingRule?.originalUrl || (sourceType === 'custom' ? currentTab.favIconUrl : undefined),
                 sourceType,
@@ -316,19 +347,26 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         setConflictRule(conflict);
     }, [applyScope, currentTab.url, rules, mode]);
 
+    // The overriding rule can only be edited here when the popup's two scope
+    // buttons can express its match type. A regex rule cannot be, so there we
+    // send the user to the settings page rather than offer a control that does
+    // nothing, which is what this button used to do in every case (L-08).
+    const canEditConflictHere = conflictRule?.matchType === 'exact_url';
+
     const switchToConflictRule = () => {
-        if (conflictRule) {
-            setApplyScope(conflictRule.matchType === 'regex' ? 'exact_url' : conflictRule.matchType as any);
-            // The useEffect for initialRule/activeRule logic might need to handle this?
-            // Actually, just switching scope might be enough if we rely on the editor to pick up the existing rule for that scope.
-            // But we might need to force a reload of that rule's data.
-            // Let's just switch scope and let the user see the data.
-            // Better: Load that rule explicitly.
-            setManualUrl(conflictRule.matcher);
-            // setApplyScope is already done above, but we need to ensure the editor state reflects the rule.
-            // We can reuse the logic that loads a rule.
-            // But for now, just switching scope is a good start, the user will see "Active" status.
+        if (!conflictRule) return;
+
+        if (canEditConflictHere) {
+            // Re-targets the editor at the exact-URL rule for this page: the
+            // Active pill, the Reset button and any save now refer to that rule,
+            // and the conflict banner clears itself because nothing outranks it.
+            selectScope('exact_url');
+            setStatusMessage({ type: 'success', text: 'Now editing the Exact URL rule for this page.' });
+            setTimeout(() => setStatusMessage(null), 2500);
+            return;
         }
+
+        openOptionsPage();
     };
 
     return (
@@ -395,7 +433,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                                 </div>
                             </div>
                             <Button size="sm" variant="secondary" onClick={switchToConflictRule} className="w-full text-[10px] h-7 bg-white border-orange-200 text-orange-700 hover:bg-orange-100">
-                                Switch to Overriding Rule
+                                {canEditConflictHere ? 'Edit that rule instead' : 'Manage it in Settings'}
                             </Button>
                         </div>
                     )}
@@ -462,13 +500,13 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                         {/* Scope Toggles */}
                         <div className="flex bg-slate-100 p-1 rounded-lg">
                             <button
-                                onClick={() => setApplyScope('domain')}
+                                onClick={() => selectScope('domain')}
                                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${applyScope === 'domain' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
                                 Entire Domain
                             </button>
                             <button
-                                onClick={() => setApplyScope('exact_url')}
+                                onClick={() => selectScope('exact_url')}
                                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${applyScope === 'exact_url' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
                                 This Page Only
