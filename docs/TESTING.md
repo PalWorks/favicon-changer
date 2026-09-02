@@ -70,6 +70,31 @@ assert on `createdAt`, it is overwritten on every save.
 
 ---
 
+## The manual list really is manual
+
+Loading the extension cannot be automated on this machine. Chrome 152 accepts
+`--load-extension` and `--disable-extensions-except` on the command line and then **silently
+ignores them**: no extension target appears over the DevTools protocol, the service worker never
+starts, `onInstalled` never opens the options page, and nothing is logged. Verified headless, and
+headful under `xvfb`, with the flags confirmed present on the real process command line. So there
+is no way to drive a real extension build from a script here; `chrome://extensions` and
+**Load unpacked** is the only route.
+
+What *can* be automated, and is worth doing before the manual pass:
+
+- `npm run check` for logic and types.
+- `npm run dev` plus a browser driver for the React surfaces. The pages render with the
+  `localStorage` storage shim, so editor behaviour, button states and rule writes can all be
+  driven and asserted without an extension at all. This is how R-05's "no writes while typing"
+  and R-03's "one rule, still regex, createdAt preserved" were confirmed.
+- `node --check dist/*.js` to catch a broken bundle, and a grep of `dist/content.js` to confirm
+  it is still a self-contained IIFE with no bare `import`.
+
+What cannot: everything that depends on the content script actually running in a page. That is
+the list below, and it is exactly the part where this codebase has historically broken.
+
+---
+
 ## What a change must be tested against manually
 
 `npm run build`, reload unpacked, then walk this list. These are the cases that have actually
