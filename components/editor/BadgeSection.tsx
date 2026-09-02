@@ -3,6 +3,7 @@ import { Accordion } from '../Accordion';
 import { Button } from '../Button';
 import { drawOverlay, drawBadge, BadgePosition } from '../../utils/canvas';
 import { FaviconRule } from '../../types';
+import { logger } from '../../utils/logger';
 
 interface BadgeSectionProps {
     isOpen: boolean;
@@ -27,6 +28,11 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
     const [badgePosition, setBadgePosition] = useState<BadgePosition>('bottom');
 
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    // Set when the base icon cannot be loaded at all. Badges and overlays are
+    // composited ON TOP of the site's current favicon, so with no base there is
+    // nothing to apply. Previously the preview simply never appeared and Apply
+    // silently did nothing (LIMITATIONS L-09).
+    const [sourceError, setSourceError] = useState<string | null>(null);
 
     // Initialize from metadata
     useEffect(() => {
@@ -43,8 +49,15 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
 
     // Generate Preview
     useEffect(() => {
-        if (!isOpen || !sourceIconUrl) return;
+        if (!isOpen) return;
 
+        if (!sourceIconUrl) {
+            setPreviewUrl(null);
+            setSourceError('This page has no favicon to badge. Set an emoji or upload an image first, then come back.');
+            return;
+        }
+
+        setSourceError(null);
         let objectUrl: string | null = null;
 
         const generate = async () => {
@@ -82,7 +95,9 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
 
                 setPreviewUrl(canvas.toDataURL('image/png'));
             } catch (error) {
-                console.error('Failed to generate preview:', error);
+                logger.error('Failed to generate badge preview', error);
+                setPreviewUrl(null);
+                setSourceError("Could not load this page's favicon to draw on. Set an emoji or upload an image first.");
             } finally {
                 if (objectUrl) {
                     URL.revokeObjectURL(objectUrl);
@@ -100,7 +115,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
     }, [isOpen, sourceIconUrl, mode, overlayColor, overlayOpacity, badgeText, badgeBgColor, badgeTextColor, badgePosition]);
 
     const handleApply = async () => {
-        if (!previewUrl) return;
+        if (!previewUrl) return; // guarded in the UI too, so this is belt-and-braces
         const metadata: FaviconRule['metadata'] = {
             mode,
             overlayColor,
@@ -113,7 +128,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
         try {
             await onSave(previewUrl, 'custom', metadata);
         } catch (e) {
-            console.error('Badge save failed:', e);
+            logger.error('Badge save failed', e);
         }
     };
 
@@ -140,6 +155,10 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                 <div className="flex justify-center bg-white p-4 rounded-lg border border-slate-200">
                     {previewUrl ? (
                         <img src={previewUrl} className="w-16 h-16 object-contain" />
+                    ) : sourceError ? (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-snug text-center">
+                            {sourceError}
+                        </p>
                     ) : (
                         <div className="w-16 h-16 bg-slate-100 rounded animate-pulse" />
                     )}
@@ -224,7 +243,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                     </div>
                 )}
 
-                <Button onClick={handleApply} isLoading={isLoading} className="w-full">Apply to Favicon</Button>
+                <Button onClick={handleApply} isLoading={isLoading} disabled={!previewUrl} className="w-full">Apply to Favicon</Button>
             </div>
         </Accordion>
     );

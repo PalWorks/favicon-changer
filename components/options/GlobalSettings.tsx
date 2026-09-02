@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GlobalSettings as GlobalSettingsType } from '../../types';
 import { FaviconPreview } from '../FaviconPreview';
 import { Button } from '../Button';
@@ -13,6 +13,11 @@ interface GlobalSettingsProps {
 export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSettingsChange, onRefresh }) => {
     const importInputRef = useRef<HTMLInputElement>(null);
     const [newExcludedDomain, setNewExcludedDomain] = useState('');
+    // Held locally while typing. Committing on every keystroke wrote to
+    // chrome.storage AND broadcast RulesUpdated to every open tab per character
+    // (LIMITATIONS L-07), which on a 40-character URL meant 40 writes and 40
+    // full-tab fan-outs. Commit happens on blur or Enter instead.
+    const [fallbackDraft, setFallbackDraft] = useState(settings.defaultFaviconUrl || '');
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -35,8 +40,18 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
         e.target.value = '';
     };
 
-    const handleGlobalFallbackChange = async (url: string) => {
-        onSettingsChange({ ...settings, defaultFaviconUrl: url || undefined });
+    // Re-sync when the value changes elsewhere (the popup, or another options
+    // tab via storage.onChanged). Keyed on the stored value, so this cannot fire
+    // mid-typing: nothing is stored until the field is committed.
+    useEffect(() => {
+        setFallbackDraft(settings.defaultFaviconUrl || '');
+    }, [settings.defaultFaviconUrl]);
+
+    const commitFallback = () => {
+        const next = fallbackDraft.trim() || undefined;
+        // Skip a no-op save so blurring an untouched field does not broadcast.
+        if (next === (settings.defaultFaviconUrl || undefined)) return;
+        onSettingsChange({ ...settings, defaultFaviconUrl: next });
     };
 
     const excludedDomains = settings.excludedDomains ?? [];
@@ -65,13 +80,14 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                         <input
                             type="text"
                             placeholder="Image URL..."
-                            value={settings.defaultFaviconUrl || ''}
-                            onChange={(e) => onSettingsChange({ ...settings, defaultFaviconUrl: e.target.value })}
-                            onBlur={(e) => handleGlobalFallbackChange(e.target.value)}
+                            value={fallbackDraft}
+                            onChange={(e) => setFallbackDraft(e.target.value)}
+                            onBlur={commitFallback}
+                            onKeyDown={(e) => { if (e.key === 'Enter') commitFallback(); }}
                             className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm"
                         />
                         <div className="w-10 h-10 shrink-0">
-                            <FaviconPreview url={settings.defaultFaviconUrl || ''} />
+                            <FaviconPreview url={fallbackDraft} />
                         </div>
                     </div>
                 </div>
