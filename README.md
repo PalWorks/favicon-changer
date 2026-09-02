@@ -85,8 +85,13 @@ npm install
 npm run dev        # Vite dev server, React UI only, with a localStorage storage shim
 npm run build      # two-pass production build into dist/
 npm test           # 20 unit tests (vitest)
-npx tsc --noEmit   # type check, not part of the build (see ROADMAP R-00: React types missing)
+npm run check      # type check + tests, the quick gate
+npm run typecheck  # tsc --noEmit alone, not part of the build
 ```
+
+`npm install` installs a `pre-push` git hook that runs the type check, the tests and the
+production build before any push (about 9 seconds). There is no CI workflow, by design;
+`git push --no-verify` bypasses the hook if you need it to.
 
 `npm run dev` cannot test favicon behaviour: there is no `chrome.*` API in a plain tab, so the
 content script does not run. Anything touching rules must be tested with an unpacked build.

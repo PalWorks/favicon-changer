@@ -31,10 +31,15 @@ npx vitest run --coverage   # needs @vitest/coverage-v8 installed first
 npx tsc --noEmit      # type check, separate from tests, and not part of the build
 ```
 
-`npx tsc --noEmit` is **not currently a usable gate**: `@types/react` and `@types/react-dom` are
-not installed, so it reports 1 known error and infers React from JavaScript rather than checking
-it ([LIMITATIONS.md](LIMITATIONS.md) L-29). Installing the types surfaced 11 errors covering a
-real prop bug (L-30). Treat ROADMAP R-00 as a prerequisite for meaningful static checking.
+`npm run check` runs the type check and the tests together. Both, plus the production build, run
+automatically before every `git push` via [.githooks/pre-push](../.githooks/pre-push); there is no
+CI workflow, by decision (ADR-012).
+
+The type check is only meaningful as of 2026-09-02: before that, React's type definitions were
+not installed at all, so component code was inferred from JavaScript rather than checked
+(LIMITATIONS L-29). Installing them surfaced a real prop bug immediately (L-30). If
+`@types/react` ever disappears from `package.json`, `allowJs: true` will quietly restore that
+blindness rather than error.
 
 There is no `vitest.config.ts`. Defaults apply: Node environment, `*.test.ts` discovery. A
 `jsdom` environment would be needed before testing anything that touches `document` or `canvas`.
@@ -102,4 +107,6 @@ broken before, in the order they broke:
    is mutated rather than replaced would lock ADR-001 into the test suite, which is where it
    belongs.
 
-There is no CI. Tests only run when someone remembers. See [../ROADMAP.md](../ROADMAP.md).
+Tests, the type check and the build all run on `git push` (ADR-012). They do **not** run on a
+pull request from a machine without the hook installed, which is the one gap left by not having a
+CI workflow. See [../ROADMAP.md](../ROADMAP.md).

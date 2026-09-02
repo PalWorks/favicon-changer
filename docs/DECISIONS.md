@@ -204,3 +204,31 @@ statement accurate at the cost of a weaker "no third parties whatsoever" claim.
 copy must not claim otherwise. The self-hosted alternative (fetching `https://<domain>/favicon.ico`
 directly) leaks the domain to that site instead and fails on many sites; it remains a roadmap
 option if the claim is later judged more valuable than the preview.
+
+---
+
+## ADR-012: A local pre-push hook instead of a CI workflow
+**Status**: Accepted · 2026-09-02
+
+**Decision.** The type check, unit tests and production build run from
+[.githooks/pre-push](../.githooks/pre-push), gating `git push` on the developer's machine. There
+is no GitHub Actions workflow, and adding one needs a deliberate decision.
+
+**Why.** Keeping GitHub Actions usage to a minimum is a project constraint. A solo repo with a
+9 second check suite does not need a hosted runner to get the same protection: the hook blocks
+the push before anything reaches the remote, which is earlier than CI would catch it anyway.
+
+**How it installs.** `package.json`'s `prepare` script runs
+`git config core.hooksPath .githooks` on `npm install`, so a fresh clone is gated after one
+install. `.git/hooks` is not versioned, which is why the hook lives in a tracked directory.
+
+**Bypass.** `git push --no-verify`. Deliberate and visible, which is the point.
+
+**Trade-off.** A hook only protects the machine it is installed on, and it cannot gate a pull
+request opened from elsewhere or a push made with `--no-verify`. If this repo ever takes outside
+contributions, that gap is real and a minimal workflow (single job, PRs to `main` only) becomes
+worth its cost. Note that GitHub Actions is free on standard runners for public repositories, so
+the cost in question is complexity and noise rather than money.
+
+**If reversed** (a workflow is added): keep the hook. The two are complementary, and the hook is
+the one that gives feedback in 9 seconds rather than 90.

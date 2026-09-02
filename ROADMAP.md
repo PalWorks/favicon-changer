@@ -20,10 +20,20 @@ Effort key: **S** ≤ half a day · **M** 1 to 3 days · **L** ≥ 1 week.
 | Rating | 4.4 ★ from 7 ratings |
 | Category | Developer Tools |
 | Tests | 20, one file, matcher only |
-| `tsc --noEmit` | **fails**, 1 error; React types are not installed (R-00) |
+| `tsc --noEmit` | clean |
+| Pre-push gate | typecheck + tests + build via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none |
 
 Table name: **product-snapshot**
+
+### Completed
+
+| Item | Done | Result |
+|---|---|---|
+| R-00 | 2026-09-02 | React types installed; `Button` gained the missing `size` prop that 11 call sites already passed. `tsc --noEmit` now clean and meaningful |
+| R-13 | 2026-09-02 | Local `pre-push` hook running typecheck + tests + build in ~9 s. No GitHub Actions workflow, by decision (ADR-012) |
+
+Table name: **completed-items**
 
 ---
 
@@ -63,7 +73,7 @@ review moves the number.
 
 ## Tier 0: do this first (half a day, and it changes what everything else costs)
 
-### R-00 · Install React type definitions, then fix what they reveal · **S**
+### R-00 · Install React type definitions, then fix what they reveal · **S** · ✅ done 2026-09-02
 `@types/react` and `@types/react-dom` are **not installed** (L-29). React 19 ships no bundled
 types, and `allowJs: true` lets TypeScript quietly infer React from its JavaScript, so every
 component, prop and hook in the project is effectively unchecked, and `npm run build` never runs
@@ -85,6 +95,12 @@ and doing that work with no type checking is how the next L-30 gets written.
 
 **Acceptance**: `npx tsc --noEmit` is clean, and the small buttons in the popup and settings page
 visibly render small.
+
+**Outcome.** Both types installed. `Button` now takes `size?: 'sm' | 'md'`, defaulting to `md`
+with the previously hardcoded padding, and destructures `size` out of the DOM spread so it stops
+leaking onto the element. Padding and font size moved from `baseStyle` into the size map so a
+size can actually override them. Verified on the options page: the four small buttons compute to
+12px / 6px-12px instead of 14px / 8px-16px, with no `size` attribute in the DOM.
 
 ---
 
@@ -206,10 +222,22 @@ log matters.
 
 ## Tier 3: engineering hygiene
 
-### R-13 · CI · **S** · *highest leverage item in this tier*
-`.github/workflows/ci.yml`: on push and PR, run `npm ci`, `npx tsc --noEmit`, `npm test`, and
-`npm run build`. There is no CI at all today (L-24), so nothing catches a type error before a
-release build.
+### R-13 · Automated checks · **S** · ✅ done 2026-09-02
+Implemented as a **local git hook, not a GitHub Actions workflow**, because minimising Actions
+usage is a project constraint (ADR-012).
+
+[.githooks/pre-push](.githooks/pre-push) runs the type check, the unit tests and the full
+two-pass production build, and blocks the push on any failure (~9 s). It installs itself through
+`package.json`'s `prepare` script (`git config core.hooksPath .githooks`) on `npm install`.
+`npm run check` runs typecheck plus tests on demand; `npm run typecheck` runs tsc alone.
+Bypass is `git push --no-verify`.
+
+Verified in both directions: passes on a clean tree, and blocks with exit 1 on an introduced
+type error.
+
+**Known gap**: a hook protects only the machine it is installed on, and cannot gate a PR from
+an outside contributor. If that becomes relevant, add a single-job workflow limited to PRs
+against `main`. See ADR-012.
 
 ### R-14 · Close the test gaps · **M**
 In value order: `utils/validation.ts`; the storage migration latch; `normalizeImageDataUrl`;
@@ -317,9 +345,8 @@ No inbound vulnerability channel exists beyond the store support page
 
 ## Suggested sequence
 
-1. **R-00** (React types) then **R-13** (CI), together under a day, and every item after
-   them is cheaper and safer. Do not skip the order: CI is worth little while the type check is
-   blind.
+1. ~~**R-00** (React types) then **R-13** (checks)~~ ✅ both done 2026-09-02. Every item below is
+   now type-checked and gated on push.
 2. **v1.4.0**: R-03 → R-04 + R-01 → R-02 → R-07 → R-12. Ship, then reply to Dylan Chang's review.
 3. **v1.4.1**: the Tier 2 bug batch, R-05, R-06, R-08, R-11, R-10, R-25.
 4. **v1.5.0**: R-33 and R-27 (the two cheapest support-load reducers), plus R-14 and R-18.

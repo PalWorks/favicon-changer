@@ -96,22 +96,21 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
   printed), `logger.debug`/`info` for the rest (opt-in only). Prefix content-script lines with
   `[Content]` and service-worker lines with `[BG]`. Never log page content or form values.
 - **No new dependencies** without asking. Two runtime dependencies is a feature.
+- **Keep GitHub Actions usage minimal.** Checks run in a local pre-push hook by decision; do not
+  add a workflow without asking. ADR-012.
 
 ---
 
 ## 5. Definition of done
 
 ```bash
-npm test              # 20 tests must pass; add tests for logic you added
-npx tsc --noEmit      # NOT part of npm run build
+npm run check         # typecheck + 20 tests, both must pass; add tests for logic you added
 npm run build         # must produce dist/ with both passes
 ```
 
-> **Caveat on the type check**: `@types/react`/`@types/react-dom` are not installed, so
-> `tsc --noEmit` reports 1 known error and silently checks nothing about components, props or
-> hooks (LIMITATIONS L-29). Until ROADMAP **R-00** lands, a clean-looking type check proves very
-> little about React code, the type checker found an 11-call-site prop bug the moment the types
-> were added. Fix R-00 first if your change touches components.
+All three run automatically on `git push` via [.githooks/pre-push](.githooks/pre-push), which
+blocks the push on failure. There is no CI workflow (ADR-012), so do not rely on anything
+catching a mistake later than that hook.
 
 Then, for anything touching `content.ts`, matching, or the upload flow, **load the unpacked
 build and walk the manual list** in [docs/TESTING.md](docs/TESTING.md), at minimum the active

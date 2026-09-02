@@ -22,10 +22,26 @@ Node 18+ (`@types/node` targets 22). No environment variables, no secrets, no se
 | `npm run dev` | Vite dev server on `0.0.0.0:3000` | UI work only, React hot reload with a `localStorage` storage shim |
 | `npm run build` | Two-pass production build into `dist/` | Before loading unpacked, and before every release |
 | `npm test` | `vitest run`, unit tests, no watch | Before every commit |
+| `npm run typecheck` | `tsc --noEmit` | Any time; also runs in the pre-push hook |
+| `npm run check` | typecheck + tests | The quick gate before committing |
 | `npx vitest` | Watch mode | While editing `utils/` |
-| `npx tsc --noEmit` | Type check (the tsconfig is `noEmit`) | Before every commit; **not** part of `npm run build`. Currently reports 1 known error and cannot check React code, see [LIMITATIONS L-29](LIMITATIONS.md) / ROADMAP R-00 |
+| `npx tsc --noEmit` | Type check directly (the tsconfig is `noEmit`) | Same as `npm run typecheck`; **not** part of `npm run build` |
 
 Table name: **commands**
+
+### The pre-push gate
+
+`npm install` points `core.hooksPath` at [.githooks/](../.githooks/) through the `prepare`
+script, so [.githooks/pre-push](../.githooks/pre-push) runs on every `git push`: type check,
+unit tests, then the full two-pass build, about 9 seconds in total. A failure blocks the push.
+
+This project has **no GitHub Actions workflow** by decision (ADR-012), so this hook is the only
+automated gate. That means two things worth remembering: if you clone fresh and never run
+`npm install`, you are not gated, and `git push --no-verify` skips it silently.
+
+To install by hand: `git config core.hooksPath .githooks`.
+
+---
 
 `npm run dev` **cannot test favicon behaviour.** There is no `chrome.*` API in a plain tab, so
 `IS_DEV` flips storage to `localStorage`, `getCurrentTabInfo()` returns an `example.com` stub, and

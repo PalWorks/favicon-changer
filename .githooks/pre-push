@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# Local gate, run before every `git push`. Deliberately a git hook rather than a
+# CI workflow: this project keeps GitHub Actions usage to a minimum, so the
+# checks live on the machine doing the pushing.
+#
+# Installed automatically by `npm install` (the "prepare" script points
+# core.hooksPath at this directory). To install by hand:
+#     git config core.hooksPath .githooks
+#
+# To push past a failure (do this knowingly, not habitually):
+#     git push --no-verify
+
+set -uo pipefail
+
+# Nothing to check if dependencies were never installed.
+if [ ! -d node_modules ]; then
+  echo "pre-push: node_modules is missing, run 'npm install' first." >&2
+  exit 1
+fi
+
+fail=0
+
+echo "pre-push: type check"
+if ! npx --no-install tsc --noEmit; then
+  echo "pre-push: FAILED type check" >&2
+  fail=1
+fi
+
+echo "pre-push: unit tests"
+if ! npx --no-install vitest run --silent; then
+  echo "pre-push: FAILED unit tests" >&2
+  fail=1
+fi
+
+# The extension ships as a build artifact, so a broken build is a broken
+# release. Both Vite passes must succeed.
+echo "pre-push: production build"
+if ! npm run build --silent > /dev/null 2>&1; then
+  echo "pre-push: FAILED production build (run 'npm run build' to see why)" >&2
+  fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "pre-push: blocked. Fix the above, or push with --no-verify if you mean to." >&2
+  exit 1
+fi
+
+echo "pre-push: all checks passed"
+exit 0

@@ -88,7 +88,11 @@ fails. The error message is good ("Storage full. Try deleting unused rules"), bu
 
 ## 3. Type safety and tooling
 
-### L-29 · React has no type definitions installed → **R-00** · *worst finding in this audit*
+### L-29 · React had no type definitions installed · *resolved 2026-09-02, R-00 done*
+**Fixed.** Kept here because it explains why the codebase looked clean while carrying L-30, and
+because `allowJs: true` will silently do this again if the types are ever dropped from
+`package.json`.
+
 `@types/react` and `@types/react-dom` are **not in `package.json` and not in
 `package-lock.json`**, and React 19 ships no bundled types. Because `tsconfig.json` sets
 `allowJs: true`, TypeScript resolves `react` to `node_modules/react/index.js` and infers types
@@ -103,7 +107,7 @@ unchecked.
 The build does not catch this because Vite transpiles without type-checking and `npm run build`
 never calls `tsc`.
 
-### L-30 · `Button` has no `size` prop, and 11 call sites pass one → **R-00**
+### L-30 · `Button` had no `size` prop while 11 call sites passed one · *resolved 2026-09-02, R-00 done*
 [components/Button.tsx](../components/Button.tsx) defines only `variant` and `isLoading`; its
 `baseStyle` hardcodes `px-4 py-2 … text-sm`. Eleven call sites pass `size="sm"`
 (FaviconEditor ×2, UploadSection ×2, DebugLogs ×4, GlobalSettings ×3), all of which:
@@ -206,9 +210,11 @@ Separate from L-29, and narrower.
 [utils/storage.ts:5](../utils/storage.ts#L5) even though `@types/chrome` is installed and listed
 in `tsconfig.json`. Every Chrome API call in those files is unchecked.
 
-### L-24 · No CI → **R-13**
-No `.github/` at all. `npm test` and `npx tsc --noEmit` run only when someone remembers, and
-neither is part of `npm run build`.
+### L-24 · Checks are local only, not enforced remotely · *resolved for this repo, R-13 done*
+Fixed as of 2026-09-02: `.githooks/pre-push` runs typecheck, tests and build before every push
+(ADR-012). Deliberately **not** a GitHub Actions workflow, so the remaining gap is that the gate
+only exists on machines where `npm install` has run, and `git push --no-verify` bypasses it. An
+outside contributor's PR would not be checked automatically.
 
 ---
 

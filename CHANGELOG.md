@@ -10,7 +10,19 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+### Fixed
+- **React type definitions were never installed** (`@types/react`, `@types/react-dom`). React 19
+  ships none, and `allowJs: true` let TypeScript infer React from its JavaScript, so every
+  component, prop and hook was unchecked. Installing them surfaced one real defect:
+- **`Button` had no `size` prop** while 11 call sites passed `size="sm"`. Those buttons rendered
+  full size, and `size` leaked onto the DOM `<button>` through the props spread. `Button` now
+  takes `size?: 'sm' | 'md'` and keeps it out of the DOM.
+- Em dashes removed from the three user-facing strings that contained them.
+
 ### Added
+- **Pre-push checks** in [.githooks/pre-push](.githooks/pre-push): type check, unit tests and the
+  production build, installed automatically by `npm install`. Deliberately a git hook rather than
+  a GitHub Actions workflow (ADR-012). New scripts: `npm run check`, `npm run typecheck`.
 - Documentation set: `AGENTS.md`, `ROADMAP.md`, `CONTEXT_MAP.md`, `CHANGELOG.md`, and
   `docs/` (`ARCHITECTURE`, `DOMAIN`, `DECISIONS`, `PLAYBOOK`, `TESTING`, `RUNBOOK`, `SECURITY`,
   `LIMITATIONS`).
