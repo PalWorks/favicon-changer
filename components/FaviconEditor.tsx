@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getCurrentTabInfo, getStorageData, saveRule, deleteRule, generateId, openOptionsPage, isAllowedFileSchemeAccess, exportRulesAsJson, importRulesFromJson, openExpandedEditor, consumePendingEditorTarget } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { findConflictingRule } from '../utils/matcher';
+import { popupClosesOnFileDialog } from '../utils/platform';
 
 import { FaviconRule, MatchType, TabInfo } from '../types';
 import { Button } from './Button';
@@ -9,13 +10,6 @@ import { FaviconPreview } from './FaviconPreview';
 import { UploadSection } from './editor/UploadSection';
 import { EmojiSection } from './editor/EmojiSection';
 import { BadgeSection } from './editor/BadgeSection';
-
-// On Linux/BSD/ChromeOS the toolbar action popup closes the instant a native
-// file-picker dialog opens, which aborts uploads. There we hand the upload off
-// to a standalone window. Windows/macOS keep the popup open, so click-to-browse
-// works directly in the bubble — no second window needed.
-const POPUP_DROPS_ON_FILE_DIALOG =
-    /Linux|CrOS|BSD/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
 
 interface FaviconEditorProps {
     mode: 'popup' | 'options';
@@ -44,7 +38,16 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     const [preservedMatchType, setPreservedMatchType] = useState<MatchType | null>(null);
     const [fileAccess, setFileAccess] = useState(true);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    // Whether this OS kills the action popup when a file dialog opens, so the
+    // upload has to be handed to a standalone window (ADR-007). Resolved from
+    // the same helper the service worker uses, so the button label cannot
+    // describe behaviour the service worker did not configure.
+    const [popupDropsFileDialog, setPopupDropsFileDialog] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        popupClosesOnFileDialog().then(setPopupDropsFileDialog);
+    }, []);
 
     useEffect(() => {
         logger.info(`FaviconEditor Mounted - Mode: ${mode} / Context: ${context}`);
@@ -228,7 +231,12 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                 originalUrl: existingRule?.originalUrl || (sourceType === 'custom' ? currentTab.favIconUrl : undefined),
                 sourceType,
                 metadata,
-                createdAt: Date.now()
+                // createdAt used to be overwritten on every save, which made the
+                // rules list's "Created" column a last-modified stamp and
+                // destroyed the only ordering signal a rule carries
+                // (LIMITATIONS L-10).
+                createdAt: existingRule?.createdAt ?? Date.now(),
+                updatedAt: Date.now()
             };
 
             logger.info('Saving rule', newRule);
@@ -534,7 +542,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                             isLoading={isSaving}
                             onError={(msg) => setStatusMessage({ type: 'error', text: msg })}
                             onSuccess={(msg) => msg ? setStatusMessage({ type: 'success', text: msg }) : setStatusMessage(null)}
-                            onRequestExpand={mode === 'popup' && context === 'action' && POPUP_DROPS_ON_FILE_DIALOG ? requestExpandedUpload : undefined}
+                            onRequestExpand={mode === 'popup' && context === 'action' && popupDropsFileDialog ? requestExpandedUpload : undefined}
                         />
 
                         <EmojiSection

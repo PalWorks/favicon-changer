@@ -1,13 +1,7 @@
 import { logger } from './utils/logger';
+import { popupClosesOnFileDialog } from './utils/platform';
 
 logger.info('Background Service Worker Loaded');
-
-// OSes where Chrome closes the toolbar action popup the moment a native
-// file-picker dialog opens (which silently aborts uploads). On these we skip
-// the bubble entirely and open the editor as a standalone window instead — the
-// window is the same UI as the bubble but survives file dialogs. On Windows/
-// macOS the bubble is kept (it stays open during the dialog).
-const POPUP_CLOSES_ON_DIALOG = new Set(['linux', 'cros', 'openbsd']);
 
 const EDITOR_BASE_URL = chrome.runtime.getURL('index.html');
 const EDITOR_WINDOW_URL = chrome.runtime.getURL('index.html?expanded=1');
@@ -17,14 +11,14 @@ const PENDING_TARGET_KEY = 'pendingEditorTarget';
 // (which we use to open a window). Runs on SW wake, install, and browser start.
 async function configureActionForOS() {
     try {
-        const { os } = await chrome.runtime.getPlatformInfo();
-        if (POPUP_CLOSES_ON_DIALOG.has(os)) {
-            // Empty popup disables the bubble so chrome.action.onClicked fires.
+        if (await popupClosesOnFileDialog()) {
+            // Empty popup disables the bubble so chrome.action.onClicked fires,
+            // and we open a standalone window that survives a file dialog.
             await chrome.action.setPopup({ popup: '' });
-            logger.info(`[BG] ${os}: bubble disabled, icon opens editor window`);
+            logger.info('[BG] bubble disabled for this OS, icon opens editor window');
         } else {
             await chrome.action.setPopup({ popup: 'index.html' });
-            logger.info(`[BG] ${os}: using default popup bubble`);
+            logger.info('[BG] using default popup bubble for this OS');
         }
     } catch (e) {
         logger.error('[BG] configureActionForOS failed', e);

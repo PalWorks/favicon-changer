@@ -1,5 +1,11 @@
 import { EmojiCategory } from "./types";
 
+// OSes where Chrome closes the toolbar action popup as soon as a native file
+// dialog opens, which silently aborts uploads. Consumed by both the service
+// worker and the editor UI through utils/platform.ts, so the two cannot
+// disagree. See docs/DECISIONS.md ADR-007.
+export const POPUP_CLOSES_ON_FILE_DIALOG = new Set(['linux', 'cros', 'openbsd']);
+
 // Debounce window for the MutationObserver in the content script.
 // Prevents rapid favicon reassertions by SPAs from triggering a
 // synchronous updateFavicon on every individual DOM mutation.
