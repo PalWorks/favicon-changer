@@ -115,6 +115,72 @@ describe('findBestRule', () => {
 });
 
 // ---------------------------------------------------------------------------
+// findBestRule: specificity (R-04)
+//
+// Before R-04 each tier was scanned with Array.find, so among equally-typed
+// matching rules the OLDEST won regardless of how specific it was. These lock
+// in "most specific wins", and that a long matcher can never jump its tier.
+// ---------------------------------------------------------------------------
+
+describe('findBestRule specificity', () => {
+  it('prefers the longer domain matcher regardless of rule order', () => {
+    const broad    = rule({ matchType: 'domain', matcher: 'google.com',          faviconUrl: 'broad.png' });
+    const specific = rule({ matchType: 'domain', matcher: 'analytics.google.com', faviconUrl: 'specific.png' });
+
+    // Created broad-first (the order that used to give the wrong answer)...
+    expect(findBestRule(GA4_URL, GA4_DOMAIN, [broad, specific])?.faviconUrl).toBe('specific.png');
+    // ...and specific-first.
+    expect(findBestRule(GA4_URL, GA4_DOMAIN, [specific, broad])?.faviconUrl).toBe('specific.png');
+  });
+
+  it('still applies the broad domain rule on a sibling subdomain', () => {
+    const broad    = rule({ matchType: 'domain', matcher: 'google.com',           faviconUrl: 'broad.png' });
+    const specific = rule({ matchType: 'domain', matcher: 'analytics.google.com', faviconUrl: 'specific.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [broad, specific])?.faviconUrl).toBe('broad.png');
+  });
+
+  it('prefers the longer regex matcher regardless of rule order', () => {
+    const broad    = rule({ matchType: 'regex', matcher: 'google',                 faviconUrl: 'broad.png' });
+    const specific = rule({ matchType: 'regex', matcher: 'google\\.com\\/search', faviconUrl: 'specific.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [broad, specific])?.faviconUrl).toBe('specific.png');
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [specific, broad])?.faviconUrl).toBe('specific.png');
+  });
+
+  it('keeps the first rule on an exact tie, so results stay stable', () => {
+    const r1 = rule({ matchType: 'domain', matcher: 'google.com', faviconUrl: 'first.png' });
+    const r2 = rule({ matchType: 'domain', matcher: 'google.com', faviconUrl: 'second.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [r1, r2])?.faviconUrl).toBe('first.png');
+  });
+
+  it('a very long domain matcher never outranks an exact_url rule', () => {
+    // Tier rank must dominate matcher length, or specificity could promote a
+    // rule out of its tier.
+    const longDomain = rule({ matchType: 'domain', matcher: 'a'.repeat(250) + '.google.com', faviconUrl: 'domain.png' });
+    const exact      = rule({ matchType: 'exact_url', matcher: GOOGLE_URL, faviconUrl: 'exact.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [longDomain, exact])?.faviconUrl).toBe('exact.png');
+  });
+
+  it('a very long regex never outranks an exact_url rule', () => {
+    const longRegex = rule({ matchType: 'regex', matcher: 'google' + '|google'.repeat(300), faviconUrl: 'regex.png' });
+    const exact     = rule({ matchType: 'exact_url', matcher: GOOGLE_URL, faviconUrl: 'exact.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [longRegex, exact])?.faviconUrl).toBe('exact.png');
+  });
+
+  it('a very long domain matcher never outranks a regex rule', () => {
+    const longDomain = rule({ matchType: 'domain', matcher: 'a'.repeat(250) + '.google.com', faviconUrl: 'domain.png' });
+    const regex      = rule({ matchType: 'regex', matcher: 'search', faviconUrl: 'regex.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [longDomain, regex])?.faviconUrl).toBe('regex.png');
+  });
+
+  it('ignores a rule with an unrecognised matchType', () => {
+    const bogus  = rule({ matchType: 'wildcard' as any, matcher: 'google.com', faviconUrl: 'bogus.png' });
+    const domain = rule({ matchType: 'domain', matcher: 'google.com', faviconUrl: 'domain.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [bogus, domain])?.faviconUrl).toBe('domain.png');
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [bogus])).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // findConflictingRule
 // ---------------------------------------------------------------------------
 
