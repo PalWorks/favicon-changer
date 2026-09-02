@@ -3,6 +3,7 @@ import { GlobalSettings as GlobalSettingsType } from '../../types';
 import { FaviconPreview } from '../FaviconPreview';
 import { Button } from '../Button';
 import { exportRulesAsJson, importRulesFromJson } from '../../utils/storage';
+import { StorageMeter } from './StorageMeter';
 import { describeImport } from '../../utils/importRules';
 
 interface GlobalSettingsProps {
@@ -68,8 +69,17 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
             </h2>
             <div className="space-y-6">
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Default Fallback Favicon</label>
-                    <p className="text-xs text-slate-500 mb-3">If a site has no favicon (and no specific rule matches), use this one.</p>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Fallback Favicon</label>
+                    {/* The old copy said "if a site has no favicon", which is not what
+                        the code does and read as the extension going rogue across the
+                        whole web. Detecting whether a site really has an icon is not
+                        possible without a network request per page, which the privacy
+                        position rules out, so the copy tells the truth instead. See
+                        ROADMAP R-25. */}
+                    <p className="text-xs text-slate-500 mb-3">
+                        Applies to <strong>every site that has no matching rule</strong>, replacing whatever icon it
+                        normally shows. Leave this empty to keep each site's own favicon.
+                    </p>
                     <div className="flex gap-2">
                         <input
                             type="text"
@@ -84,6 +94,13 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                             <FaviconPreview url={fallbackDraft} />
                         </div>
                     </div>
+
+                    {settings.defaultFaviconUrl && (
+                        <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-snug">
+                            This is replacing the favicon on every site you visit that has no rule of its own. Clear
+                            the field above to stop that.
+                        </p>
+                    )}
                 </div>
 
                 <div className="pt-4 border-t border-slate-100">
@@ -121,6 +138,8 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                         </ul>
                     )}
                 </div>
+
+                <StorageMeter />
 
                 <div className="pt-4 border-t border-slate-100 flex gap-2">
                     <input type="file" ref={importInputRef} className="hidden" accept=".json" onChange={handleImport} />

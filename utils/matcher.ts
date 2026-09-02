@@ -74,8 +74,12 @@ const scoreMatch = (matchType: MatchType, matcher: string, currentUrl: string, c
     }
 };
 
-const scoreRule = (rule: FaviconRule, currentUrl: string, currentDomain: string): number =>
-    scoreMatch(rule.matchType, rule.matcher, currentUrl, currentDomain);
+const scoreRule = (rule: FaviconRule, currentUrl: string, currentDomain: string): number => {
+    // A paused rule is invisible to matching, which also means it can never be
+    // reported as a conflict.
+    if (rule.enabled === false) return NO_MATCH;
+    return scoreMatch(rule.matchType, rule.matcher, currentUrl, currentDomain);
+};
 
 /**
  * Whether one pattern would match a given URL. Used by the editor to show, live,
@@ -106,25 +110,34 @@ export const findBestRule = (currentUrl: string, currentDomain: string, rules: F
 };
 
 /**
- * Finds a rule that will shadow the one currently being edited, so the editor
- * can warn instead of letting the user save a change with no visible effect.
- * Only checks the domain scope: nothing outranks an exact_url rule, so editing
- * one needs no warning.
+ * Finds the rule that would beat the one currently being edited on this page,
+ * so the editor can warn instead of letting the user save a change with no
+ * visible effect.
+ *
+ * Scores the candidate exactly as findBestRule would and looks for anything
+ * that outscores it, which covers same-tier shadowing (a longer matcher of the
+ * same type) as well as a higher tier. It used to compare only two hardcoded
+ * types against a domain-scoped edit, which meant a domain rule for
+ * `docs.google.com` could silently beat one for `google.com` with no warning.
+ *
+ * Returns null when the candidate does not match the page at all: there is
+ * nothing to shadow, and the editor already says the pattern does not match.
  */
-export const findConflictingRule = (targetUrl: string, currentScope: MatchType, rules: FaviconRule[], targetHostname = ''): FaviconRule | null => {
-    const editedTier = TIER_RANK[currentScope];
-    if (editedTier === undefined) return null;
+export const findConflictingRule = (
+    candidate: { matchType: MatchType; matcher: string },
+    targetUrl: string,
+    targetHostname: string,
+    rules: FaviconRule[]
+): FaviconRule | null => {
+    const candidateScore = scoreMatch(candidate.matchType, candidate.matcher, targetUrl, targetHostname);
+    if (candidateScore === NO_MATCH) return null;
 
-    // Anything in a strictly higher tier that also matches this page will win,
-    // so the edit would have no visible effect. Same-tier shadowing is still
-    // not reported (ROADMAP R-35): within a tier the winner depends on matcher
-    // length, which needs the edited matcher, not just its type.
     let best: FaviconRule | null = null;
-    let bestScore = NO_MATCH;
+    let bestScore = candidateScore;
 
     for (const rule of rules) {
-        const tier = TIER_RANK[rule.matchType];
-        if (tier === undefined || tier <= editedTier) continue;
+        // The rule this save will overwrite cannot conflict with itself.
+        if (rule.matchType === candidate.matchType && rule.matcher === candidate.matcher) continue;
         const score = scoreRule(rule, targetUrl, targetHostname);
         if (score > bestScore) {
             best = rule;

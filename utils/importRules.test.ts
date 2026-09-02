@@ -193,6 +193,20 @@ describe('validateImportedRules: field rebuilding', () => {
     expect(out.accepted.b.createdAt).toBeGreaterThan(0);
   });
 
+  it('carries over an explicit paused flag, and nothing else', () => {
+    const out = validateImportedRules(file(
+      raw({ id: 'a', enabled: false }),
+      raw({ id: 'b', enabled: true }),
+      raw({ id: 'c' }),
+      raw({ id: 'd', enabled: 'maybe' }),
+    ));
+    expect(out.accepted.a.enabled).toBe(false);
+    // Absent means enabled, so true and junk both leave the flag off.
+    expect('enabled' in out.accepted.b).toBe(false);
+    expect('enabled' in out.accepted.c).toBe(false);
+    expect('enabled' in out.accepted.d).toBe(false);
+  });
+
   it('only keeps originalUrl when it is itself an allowed icon URL', () => {
     const good = validateImportedRules(file(raw({ id: 'a', originalUrl: 'https://x.example/i.png' })));
     expect(good.accepted.a.originalUrl).toBe('https://x.example/i.png');

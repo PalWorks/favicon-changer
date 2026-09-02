@@ -22,6 +22,7 @@ Defined in [types.ts](../types.ts). One row of user intent: "on pages matching X
 | `metadata` | Editor state to rehydrate | Emoji char, badge text/colours/position, overlay colour/opacity, image fit mode |
 | `createdAt` | `Date.now()` | First save. Preserved across later edits |
 | `updatedAt?` | `Date.now()` | Last save. Absent on rules written before this field existed |
+| `enabled?` | `boolean` | Absent or `true` means active. An explicit `false` pauses the rule: it stops matching and stops being reported as a conflict, but keeps its icon and settings. Optional so no migration was needed, and so "enabled" is the default |
 
 Table name: **favicon-rule-fields**
 
@@ -153,6 +154,7 @@ browser can decode. Repair runs once up front and again as a retry on image load
 | **Conflict** | A higher-precedence rule that will shadow the rule being edited. |
 | **Original favicon** | The page's own icon, captured before first mutation, restored when a rule is deleted. |
 | **Exclusion** | A hostname on `excludedDomains`. Stronger than any rule. |
+| **Paused** | A rule with `enabled: false`. Invisible to matching, still listed and editable. |
 | **Hand-off** | Passing the edit target from the popup to the standalone window via `pendingEditorTarget`. |
 | **Change mark** | The `data-fc-modified` attribute marking the `<link>` we own, so the observer ignores our own writes. |
 
@@ -172,8 +174,10 @@ Things that must stay true. Breaking one of these is a bug even if tests pass.
 5. **Our own DOM writes never trigger a re-apply**, they carry `data-fc-modified` and the
    observer skips marked elements.
 6. **Every rule has a unique `id`, and `rules` is keyed by that same `id`.**
-7. **Nothing leaves the device** except a fetch of a URL the user typed, the current site's own
+7. **A paused rule never matches and never shadows.** Both fall out of one check in
+   `scoreRule`; do not add a second path that bypasses it.
+8. **Nothing leaves the device** except a fetch of a URL the user typed, the current site's own
    icon, and the options-page preview call to Google's favicon service. All three are documented
    in [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md); adding a fourth means amending that file.
-8. **Stored icons stay small.** Uploads are capped at 128px and compressed, because
+9. **Stored icons stay small.** Uploads are capped at 128px and compressed, because
    `chrome.storage.local` has a hard quota and there is no `unlimitedStorage` permission.

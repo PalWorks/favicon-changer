@@ -23,9 +23,10 @@ interface RulesListProps {
     editingRuleId?: string;
     onEdit: (rule: FaviconRule) => void;
     onDelete: (id: string) => void;
+    onToggleEnabled: (rule: FaviconRule) => void;
 }
 
-export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEdit, onDelete }) => {
+export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEdit, onDelete, onToggleEnabled }) => {
     return (
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -43,7 +44,7 @@ export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEd
                         <div
                             key={rule.id}
                             onClick={() => onEdit(rule)}
-                            className={`p-4 flex items-center gap-4 hover:bg-indigo-50 transition-colors cursor-pointer group ${editingRuleId === rule.id ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : ''}`}
+                            className={`p-4 flex items-center gap-4 hover:bg-indigo-50 transition-colors cursor-pointer group ${editingRuleId === rule.id ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : ''} ${rule.enabled === false ? 'opacity-55' : ''}`}
                         >
                             <div className="shrink-0">
                                 <FaviconPreview url={rule.faviconUrl} size="md" />
@@ -56,6 +57,7 @@ export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEd
                                     <p className="font-mono text-sm text-slate-700 truncate">{rule.matcher}</p>
                                 </div>
                                 <p className="text-xs text-slate-400">
+                                    {rule.enabled === false && <span className="text-amber-600 font-semibold">Paused · </span>}
                                     Created {new Date(rule.createdAt).toLocaleDateString()}
                                     {rule.updatedAt && new Date(rule.updatedAt).toLocaleDateString() !== new Date(rule.createdAt).toLocaleDateString()
                                         ? ` · edited ${new Date(rule.updatedAt).toLocaleDateString()}`
@@ -63,6 +65,18 @@ export const RulesList: React.FC<RulesListProps> = ({ rules, editingRuleId, onEd
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
+                                {/* Pause rather than delete, so a rule can be ruled out as
+                                    the cause of something without losing its icon. */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onToggleEnabled(rule); }}
+                                    role="switch"
+                                    aria-checked={rule.enabled !== false}
+                                    aria-label={`${rule.enabled === false ? 'Resume' : 'Pause'} rule for ${rule.matcher}`}
+                                    title={rule.enabled === false ? 'Resume this rule' : 'Pause this rule without deleting it'}
+                                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${rule.enabled === false ? 'bg-slate-300' : 'bg-indigo-600'}`}
+                                >
+                                    <span className={`absolute top-0.5 h-4 w-4 bg-white rounded-full shadow transition-all ${rule.enabled === false ? 'left-0.5' : 'left-4'}`} />
+                                </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onDelete(rule.id); }}
                                     className="p-2 text-slate-300 hover:text-red-600 transition-colors"

@@ -41,6 +41,35 @@ if ! npm run build --silent > /dev/null 2>&1; then
   fail=1
 fi
 
+# Dependency audit. The shipped extension only depends on react and react-dom,
+# so a production-scope finding is both rare and worth stopping for. Dev-only
+# findings (Vite's dev server, mostly) are reported but do not block: they are
+# frequent, often unfixable the same day, and do not reach users.
+#
+# A failure that is not a vulnerability (no network, registry down) must not
+# block a push, so only an actual "vulnerabilities" verdict counts.
+echo "pre-push: dependency audit (production scope)"
+audit_out=$(npm audit --omit=dev --audit-level=high 2>&1 || true)
+# Order matters: "found 0 vulnerabilities" also contains a digit followed by
+# "vulnerabilit", so the clean case has to be recognised first.
+if printf '%s' "$audit_out" | grep -q "found 0 vulnerabilities"; then
+  echo "pre-push: no production advisories"
+elif printf '%s' "$audit_out" | grep -qE '[1-9][0-9]* vulnerabilit'; then
+  printf '%s\n' "$audit_out" | tail -20 >&2
+  echo "pre-push: FAILED dependency audit (production dependencies)" >&2
+  fail=1
+else
+  echo "pre-push: audit inconclusive (offline?), continuing" >&2
+fi
+
+dev_audit=$(npm audit --audit-level=high 2>&1 || true)
+if ! printf '%s' "$dev_audit" | grep -q "found 0 vulnerabilities"; then
+  dev_line=$(printf '%s\n' "$dev_audit" | grep -E '^[1-9][0-9]* vulnerabilit' || true)
+  if [ -n "$dev_line" ]; then
+    echo "pre-push: note, dev-only advisories present, not blocking: $dev_line" >&2
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "" >&2
   echo "pre-push: blocked. Fix the above, or push with --no-verify if you mean to." >&2

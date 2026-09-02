@@ -31,6 +31,9 @@ export interface FaviconRule {
   };
   createdAt: number;   // first save; preserved across later edits
   updatedAt?: number;  // last save. Absent on rules written before this existed
+  // Absent or true means active. Optional so every rule written before this
+  // existed stays valid with no migration, and so "enabled" is the default.
+  enabled?: boolean;
 }
 
 export interface GlobalSettings {

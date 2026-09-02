@@ -33,7 +33,10 @@ Table name: **commands**
 
 `npm install` points `core.hooksPath` at [.githooks/](../.githooks/) through the `prepare`
 script, so [.githooks/pre-push](../.githooks/pre-push) runs on every `git push`: type check,
-unit tests, then the full two-pass build, about 9 seconds in total. A failure blocks the push.
+unit tests, the full two-pass build, then `npm audit` scoped to production dependencies. About
+9 seconds in total. A failure blocks the push. Dev-only advisories are printed as a note and do
+not block, and an audit that cannot reach the registry is reported as inconclusive rather than
+failing, so an offline push still works.
 
 This project has **no GitHub Actions workflow** by decision (ADR-012), so this hook is the only
 automated gate. That means two things worth remembering: if you clone fresh and never run
@@ -42,6 +45,9 @@ automated gate. That means two things worth remembering: if you clone fresh and 
 To install by hand: `git config core.hooksPath .githooks`.
 
 ---
+
+The dev server binds to localhost only, on purpose (see [SECURITY.md](SECURITY.md)). Use
+`npm run dev -- --host` if you need it from another device.
 
 `npm run dev` **cannot test favicon behaviour.** There is no `chrome.*` API in a plain tab, so
 `IS_DEV` flips storage to `localStorage`, `getCurrentTabInfo()` returns an `example.com` stub, and

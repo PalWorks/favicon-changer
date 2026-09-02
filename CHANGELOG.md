@@ -24,8 +24,21 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   editor also shows how many of your open tabs the pattern currently matches, and which, so a
   pattern can be checked before it is saved rather than after.
 - The rules list labels and colours all four match types.
+- **Pause a rule instead of deleting it.** A switch on each rule in the settings list turns it off
+  without losing its icon or settings, so ruling a rule out as the cause of something no longer
+  means recreating it afterwards. Paused rules never match and never trigger a conflict warning.
+- **A storage meter** in settings, showing bytes used against the browser quota with a warning
+  band, since every icon is stored on your device and the only previous signal was a save failing.
 
 ### Security
+- **The dev server no longer listens on every network interface.** `vite.config.ts` bound it to
+  `0.0.0.0`, so `npm run dev` was reachable from the local network and any VPN interface, while
+  Vite's dev server had four open path-traversal and arbitrary-file-read advisories. It is now
+  localhost-only; `npm run dev -- --host` is the explicit opt-in. Affects contributors, not users.
+- **Six high-severity advisories closed** by moving Vite from 6.4.1 to 6.4.3, inside the existing
+  version range. Production dependencies were and are clean.
+- `npm audit` now runs in the pre-push hook, blocking on production-scope findings and reporting
+  dev-only ones without blocking.
 - **Rules import is validated properly.** Every rule in an imported file is rebuilt field by
   field rather than trusted: the match type must be one we know, a regex must compile, and the
   icon must be an inline image or an http(s) address, which rejects `javascript:`,
@@ -51,6 +64,18 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   and skips a no-op save.
 - **The Badge and Overlay tool explains itself on a page with no favicon** instead of showing an
   endless loading placeholder and an Apply button that silently did nothing.
+- **The fallback favicon setting now says what it does.** It was labelled as applying "if a site
+  has no favicon" while actually applying to every site without a matching rule, which read as the
+  extension going rogue across the whole web. The behaviour is unchanged and intended; the copy was
+  wrong, and it now warns while a fallback is set. Distinguishing the two cases would need a
+  network request per page, which this extension will not do.
+- **An icon that cannot be decoded now falls back to the placeholder** instead of showing the
+  browser's broken-image glyph. Such an icon fires a load event rather than an error, so nothing
+  had caught it.
+- **Debug logging no longer loses entries.** Each line was a separate read-modify-write of the
+  whole log, so the content script and the popup overwrote each other, precisely when the log was
+  being relied on. Entries are now batched, writes are serialised, and the buffer is flushed
+  before the popup can be destroyed.
 - **The rule conflict banner covers every case and its button does something.** It now reports
   any higher-precedence rule that would win, not just the two types it used to know about, names
   the rule that wins, and excludes the rule being edited from shadowing itself. It re-targets the editor at the

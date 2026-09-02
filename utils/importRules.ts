@@ -103,6 +103,8 @@ const validateRule = (raw: any): { rule: FaviconRule } | { reason: string } => {
         rule.originalUrl = raw.originalUrl;
     }
     if (typeof raw.updatedAt === 'number' && raw.updatedAt > 0) rule.updatedAt = raw.updatedAt;
+    // Only an explicit false is carried over; anything else means enabled.
+    if (raw.enabled === false) rule.enabled = false;
 
     const metadata = cleanMetadata(raw.metadata);
     if (metadata) rule.metadata = metadata;

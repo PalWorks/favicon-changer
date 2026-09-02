@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import ReactDOM from 'react-dom/client';
-import { getStorageData, deleteRule, saveSettings } from './utils/storage';
+import { getStorageData, deleteRule, saveRule, saveSettings } from './utils/storage';
 import { FaviconRule, GlobalSettings as GlobalSettingsType } from './types';
 import { FaviconEditor } from './components/FaviconEditor';
 import { GlobalSettings } from './components/options/GlobalSettings';
@@ -52,6 +52,19 @@ const OptionsApp: React.FC = () => {
                 setEditingRule(null);
             }
         }
+    };
+
+    const handleToggleEnabled = async (rule: FaviconRule) => {
+        // Absent means enabled, so pausing writes an explicit false and
+        // resuming clears the flag rather than writing true.
+        const next = { ...rule, updatedAt: Date.now() };
+        if (rule.enabled === false) {
+            delete next.enabled;
+        } else {
+            next.enabled = false;
+        }
+        await saveRule(next);
+        refreshData();
     };
 
     return (
@@ -124,6 +137,7 @@ const OptionsApp: React.FC = () => {
                                 editingRuleId={editingRule?.id}
                                 onEdit={setEditingRule}
                                 onDelete={handleDelete}
+                                onToggleEnabled={handleToggleEnabled}
                             />
 
                             <DebugLogs />

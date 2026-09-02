@@ -212,6 +212,11 @@ function applyRule() {
       updateFavicon(rule.faviconUrl);
       setupObserver(rule.faviconUrl);
     } else if (settings.defaultFaviconUrl) {
+      // Deliberately applies to EVERY page with no matching rule, whether or
+      // not it has an icon of its own. Telling those two cases apart would need
+      // a network request per page (a site can serve /favicon.ico with no
+      // <link> tag at all), which the privacy position rules out. The settings
+      // copy says so plainly rather than promising otherwise. ROADMAP R-25.
       logger.info(`[Content] Applied Global Default`);
       updateFavicon(settings.defaultFaviconUrl);
       setupObserver(settings.defaultFaviconUrl);

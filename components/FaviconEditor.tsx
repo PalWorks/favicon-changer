@@ -425,14 +425,21 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     // tier that also matches this page will win, so the edit would have no
     // visible effect and the user should be told before they save.
     useEffect(() => {
-        if (!targetUrl) {
+        if (!targetUrl || !currentMatcher) {
             setConflictRule(null);
             return;
         }
-        // A rule being edited cannot shadow itself.
+        // A rule being edited cannot shadow itself. findConflictingRule also
+        // skips any rule with the same type and matcher, which covers the case
+        // where the save will overwrite it.
         const others = initialRule ? rules.filter(r => r.id !== initialRule.id) : rules;
-        setConflictRule(findConflictingRule(targetUrl, applyScope, others, targetDomain));
-    }, [applyScope, targetUrl, targetDomain, rules, initialRule]);
+        setConflictRule(findConflictingRule(
+            { matchType: applyScope, matcher: currentMatcher },
+            targetUrl,
+            targetDomain,
+            others,
+        ));
+    }, [applyScope, currentMatcher, targetUrl, targetDomain, rules, initialRule]);
 
     // Re-targets the editor at the rule that would win, so the user can edit
     // that one instead. Every match type is representable in the editor now
@@ -527,7 +534,9 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Target Page</h2>
                             <div className="flex items-center gap-2">
-                                {activeRule ? (
+                                {activeRule && activeRule.enabled === false ? (
+                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full font-bold uppercase tracking-wide" title="This rule exists but is paused in Settings">Paused</span>
+                                ) : activeRule ? (
                                     <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full font-bold uppercase tracking-wide">Active</span>
                                 ) : (
                                     <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full font-bold uppercase tracking-wide">Inactive</span>

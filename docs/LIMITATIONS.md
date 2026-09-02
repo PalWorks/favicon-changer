@@ -45,11 +45,12 @@ rewriting would be worse.
 
 ## 2. Rules and settings UX
 
-### L-06 · The global fallback favicon applies to every unmatched page → **R-25**
-The settings copy says "if a site has no favicon"; the implementation applies
-`defaultFaviconUrl` to **every** page with no matching rule
-([content.ts:216](../content.ts#L216)), regardless of whether that page has its own icon. Users
-set it once and believe the extension has gone rogue across the whole web.
+### L-06 · The global fallback favicon applies to every unmatched page · *copy corrected 2026-09-02, R-25 done*
+The behaviour is unchanged and is not a bug: `defaultFaviconUrl` applies to **every** page with
+no matching rule, whether or not it has an icon of its own. What was wrong was the copy, which
+promised "if a site has no favicon". Telling those two cases apart needs a network request per
+page (a site can serve `/favicon.ico` with no `<link>` tag at all), which the privacy position
+rules out, so the setting now says what it does and warns while it is active.
 
 ### L-07 · The fallback URL field wrote storage and messaged every tab per keystroke · *resolved 2026-09-02, R-05 done*
 [GlobalSettings.tsx:69](../components/options/GlobalSettings.tsx#L69) calls `onSettingsChange` on
@@ -74,13 +75,15 @@ The preview effect returns early when `sourceIconUrl` is empty, so `previewUrl` 
 "last modified". Harmless today, but it destroys the only ordering signal, which L-04's fix may
 want to use.
 
-### L-11 · The rules list does not scale → **R-32**, **R-33**
-No search, sort, filter, bulk delete, or per-rule enable/disable. Past roughly 30 rules the list
-is unmanageable, and testing a rule requires deleting it.
+### L-11 · The rules list does not scale → **R-32** · *partly resolved 2026-09-02, R-33 done*
+Per-rule pause is **done**: a rule can be switched off without losing its icon, so ruling one out
+as the cause of something no longer means deleting it. Still missing: search, sort, filter and
+bulk delete. Past roughly 30 rules the list is unmanageable.
 
-### L-12 · No storage-usage visibility → **R-27**
-Icons are stored inline (ADR-004) against a finite quota. The user finds out at the moment a save
-fails. The error message is good ("Storage full. Try deleting unused rules"), but arrives too late.
+### L-12 · No storage-usage visibility · *resolved 2026-09-02, R-27 done*
+**Fixed.** The settings page shows a meter of bytes used against the quota, with a warning band
+from 75% that points at image-upload rules as the biggest consumers. The "Storage full" error on
+save is still the backstop, but it is no longer the first warning.
 
 ---
 
@@ -121,6 +124,21 @@ Invisible without React types, which is exactly why L-29 matters.
 
 ## 4. Runtime and robustness
 
+### L-31 · An undecodable icon showed a broken-image glyph, not the fallback · *resolved 2026-09-02*
+A `data:` URL that is well-formed but not a decodable image (which an imported rule can carry,
+since decodability cannot be checked at import time) leaves a 0x0 image and fires **load**, not
+error. Worse, a data URL can finish loading before React attaches the handlers, so neither fired.
+`FaviconPreview` now also checks the element directly for `complete && naturalWidth === 0`.
+Found while verifying R-33 against deliberately broken test data.
+
+### L-32 · The dev server was exposed on every network interface · *resolved 2026-09-02*
+`vite.config.ts` set `host: '0.0.0.0'`, so `npm run dev` listened on the LAN and on any VPN or
+tailnet interface. Vite's dev server has a recurring class of path-traversal and
+arbitrary-file-read advisories (four were open against the pinned version, since updated), which
+made that bind a file-read surface on the developer's machine. Now localhost-only, with
+`npm run dev -- --host` as the explicit opt-in. See [SECURITY.md](SECURITY.md) threat 6.
+
+
 ### L-13 · The content script could be initialised twice · *resolved 2026-09-02, R-08 done*
 `content.js` is both declared in the manifest and injected on demand by
 `ensureContentScriptReady` (ADR-008). The `PING` guard usually prevents a double-inject, but a
@@ -139,11 +157,12 @@ may wake. It does not check whether a tab could even be affected by the change.
 can disagree (the UA test also catches Android, then explicitly excludes it), and a disagreement
 means the button says "Browse" while the bubble is disabled, or vice versa.
 
-### L-16 · Log writes race and are expensive when enabled → **R-20**
-Each log line does a read-modify-write of the whole `debug_logs` array
-([logger.ts:86](../utils/logger.ts#L86)). Concurrent writes from the content script and the popup
-lose entries, and a chatty page does a storage round trip per line. Only active with verbose
-logging on, which is exactly when the log needs to be trustworthy.
+### L-16 · Log writes raced and were expensive when enabled · *resolved 2026-09-02, R-20 done*
+**Fixed.** Entries are buffered in memory and written as one batch every 250 ms, with flushes
+chained so two can never interleave their read-modify-write. `pagehide` forces a flush, because
+the popup is destroyed on blur and would otherwise take the buffer with it. `getLogs()` returns
+buffered entries too, so the viewer never looks stale, and the ring buffer now trims with
+`splice` rather than a single `shift` that could not keep up with a batch.
 
 ### L-17 · A page can still fight for the icon
 The debounce plus self-stopping poller (ADR-003) bound the cost, but a page that reasserts its

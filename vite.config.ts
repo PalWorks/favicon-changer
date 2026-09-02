@@ -8,7 +8,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    // Deliberately NOT host: '0.0.0.0'. That exposed the dev server to the whole
+    // local network (and any VPN/tailnet interface), and Vite's dev server has a
+    // recurring class of path-traversal and arbitrary-file-read advisories, so a
+    // wide bind turns a dev convenience into a file-read surface. Pass
+    // `npm run dev -- --host` when access from another device is actually needed.
   },
   plugins: [react()],
   resolve: {

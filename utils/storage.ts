@@ -271,6 +271,48 @@ export const getCurrentTabInfo = async (): Promise<TabInfo> => {
   });
 };
 
+// --- Storage usage ---
+
+export interface StorageUsage {
+  bytes: number;
+  quota: number;
+  percent: number;
+}
+
+// chrome.storage.local's documented default, used when the runtime does not
+// expose QUOTA_BYTES. No unlimitedStorage permission is requested, on purpose.
+const DEFAULT_LOCAL_QUOTA = 10 * 1024 * 1024;
+
+/**
+ * How much of the storage quota the user's rules occupy. Every icon is stored
+ * inline as a data URL (ADR-004), so this fills up with use, and until now the
+ * only signal was a save failing.
+ */
+export const getStorageUsage = async (): Promise<StorageUsage> => {
+  const quota = DEFAULT_LOCAL_QUOTA;
+
+  if (IS_DEV) {
+    const raw = localStorage.getItem(MOCK_STORAGE_KEY) || '';
+    return { bytes: raw.length, quota, percent: (raw.length / quota) * 100 };
+  }
+
+  return new Promise((resolve) => {
+    if (!chrome.storage?.local?.getBytesInUse) {
+      resolve({ bytes: 0, quota, percent: 0 });
+      return;
+    }
+    chrome.storage.local.getBytesInUse(null, (bytes: number) => {
+      if (chrome.runtime.lastError) {
+        logger.warn('[Storage] getBytesInUse failed:', chrome.runtime.lastError.message);
+        resolve({ bytes: 0, quota, percent: 0 });
+        return;
+      }
+      const limit = (chrome.storage.local as any).QUOTA_BYTES || quota;
+      resolve({ bytes, quota: limit, percent: (bytes / limit) * 100 });
+    });
+  });
+};
+
 // --- Open tabs, for the editor's live pattern preview ---
 
 export interface OpenTab {

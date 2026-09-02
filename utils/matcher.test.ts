@@ -278,60 +278,127 @@ describe('findBestRule specificity', () => {
 // findConflictingRule
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Paused rules (R-33)
+// ---------------------------------------------------------------------------
+
+describe('paused rules', () => {
+  it('never match', () => {
+    const paused = rule({ matchType: 'domain', matcher: 'google.com', enabled: false });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [paused])).toBeNull();
+  });
+
+  it('let a lower-precedence active rule win instead', () => {
+    const paused = rule({ matchType: 'exact_url', matcher: GOOGLE_URL,  enabled: false, faviconUrl: 'paused.png' });
+    const active = rule({ matchType: 'domain',    matcher: 'google.com', faviconUrl: 'active.png' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [paused, active])?.faviconUrl).toBe('active.png');
+  });
+
+  it('treat an absent flag and an explicit true as enabled', () => {
+    const implicit = rule({ matchType: 'domain', matcher: 'google.com' });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [implicit])).toBe(implicit);
+
+    const explicit = rule({ matchType: 'domain', matcher: 'google.com', enabled: true });
+    expect(findBestRule(GOOGLE_URL, GOOGLE_DOMAIN, [explicit])).toBe(explicit);
+  });
+
+  it('are never reported as a conflict, since they cannot win', () => {
+    const paused = rule({ matchType: 'exact_url', matcher: GOOGLE_URL, enabled: false });
+    const edit = { matchType: 'domain' as const, matcher: 'google.com' };
+    expect(findConflictingRule(edit, GOOGLE_URL, GOOGLE_DOMAIN, [paused])).toBeNull();
+  });
+});
+
 describe('findConflictingRule', () => {
-  it('returns null for exact_url scope (only checks domain scope)', () => {
+  const domainEdit = { matchType: 'domain' as const, matcher: 'google.com' };
+
+  it('returns null when nothing else matches the page', () => {
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [])).toBeNull();
+  });
+
+  it('returns null when the candidate does not match the page at all', () => {
+    // Nothing to shadow, and the editor already reports the non-match.
+    const other = rule({ matchType: 'exact_url', matcher: GOOGLE_URL });
+    const elsewhere = { matchType: 'domain' as const, matcher: 'bing.com' };
+    expect(findConflictingRule(elsewhere, GOOGLE_URL, GOOGLE_DOMAIN, [other])).toBeNull();
+  });
+
+  it('returns null for a rule that is the one being overwritten', () => {
+    const same = rule({ matchType: 'domain', matcher: 'google.com' });
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [same])).toBeNull();
+  });
+
+  it('reports an exact_url rule shadowing a domain edit', () => {
     const r = rule({ matchType: 'exact_url', matcher: GOOGLE_URL });
-    expect(findConflictingRule(GOOGLE_URL, 'exact_url', [r])).toBeNull();
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [r])).toBe(r);
   });
 
-  it('returns null when no conflicting rules exist for domain scope', () => {
-    const r = rule({ matchType: 'domain', matcher: 'google.com' });
-    expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBeNull();
-  });
-
-  it('returns exact_url conflict when adding a domain rule for the same URL', () => {
-    const r = rule({ matchType: 'exact_url', matcher: GOOGLE_URL });
-    expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBe(r);
-  });
-
-  it('returns regex conflict when a regex rule matches the target URL', () => {
+  it('reports a regex rule shadowing a domain edit', () => {
     const r = rule({ matchType: 'regex', matcher: 'google\\.com\\/search' });
-    expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBe(r);
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [r])).toBe(r);
   });
 
-  it('returns null for invalid regex (treated as non-conflicting)', () => {
-    const r = rule({ matchType: 'regex', matcher: '[invalid(' });
-    expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBeNull();
-  });
-
-  it('returns null when regex does not match the target URL', () => {
-    const r = rule({ matchType: 'regex', matcher: 'bing\\.com' });
-    expect(findConflictingRule(GOOGLE_URL, 'domain', [r])).toBeNull();
-  });
-
-  it('reports a prefix rule shadowing a domain-scoped edit', () => {
+  it('reports a prefix rule shadowing a domain edit', () => {
     const r = rule({ matchType: 'prefix', matcher: SHEET_PREFIX });
-    expect(findConflictingRule(SHEET_URL, 'domain', [r], SHEET_DOMAIN)).toBe(r);
+    const edit = { matchType: 'domain' as const, matcher: 'google.com' };
+    expect(findConflictingRule(edit, SHEET_URL, SHEET_DOMAIN, [r])).toBe(r);
   });
 
   it('reports the highest-ranked shadowing rule when several apply', () => {
     const prefix = rule({ matchType: 'prefix',    matcher: SHEET_PREFIX, faviconUrl: 'prefix.png' });
     const exact  = rule({ matchType: 'exact_url', matcher: SHEET_URL,    faviconUrl: 'exact.png' });
-    expect(findConflictingRule(SHEET_URL, 'domain', [prefix, exact], SHEET_DOMAIN)?.faviconUrl).toBe('exact.png');
+    const edit = { matchType: 'domain' as const, matcher: 'google.com' };
+    expect(findConflictingRule(edit, SHEET_URL, SHEET_DOMAIN, [prefix, exact])?.faviconUrl).toBe('exact.png');
   });
 
-  it('does not report a lower or equal tier as a conflict', () => {
-    // A domain rule cannot shadow a prefix edit, and same-tier shadowing is
-    // deliberately out of scope here (ROADMAP R-35).
-    const domain = rule({ matchType: 'domain', matcher: 'google.com' });
-    expect(findConflictingRule(SHEET_URL, 'prefix', [domain], SHEET_DOMAIN)).toBeNull();
-
-    const otherPrefix = rule({ matchType: 'prefix', matcher: 'https://docs.google.com' });
-    expect(findConflictingRule(SHEET_URL, 'prefix', [otherPrefix], SHEET_DOMAIN)).toBeNull();
+  it('ignores an invalid regex rule', () => {
+    const r = rule({ matchType: 'regex', matcher: '[invalid(' });
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [r])).toBeNull();
   });
 
-  it('returns null when editing a regex rule and only a domain rule exists', () => {
+  it('ignores a rule that does not match the page', () => {
+    const r = rule({ matchType: 'regex', matcher: 'bing\\.com' });
+    expect(findConflictingRule(domainEdit, GOOGLE_URL, GOOGLE_DOMAIN, [r])).toBeNull();
+  });
+
+  it('returns null when editing the highest tier, since nothing can outrank it', () => {
     const domain = rule({ matchType: 'domain', matcher: 'google.com' });
-    expect(findConflictingRule(GOOGLE_URL, 'regex', [domain], GOOGLE_DOMAIN)).toBeNull();
+    const edit = { matchType: 'exact_url' as const, matcher: GOOGLE_URL };
+    expect(findConflictingRule(edit, GOOGLE_URL, GOOGLE_DOMAIN, [domain])).toBeNull();
+  });
+
+  it('reports a lower tier never shadowing a higher one', () => {
+    const domain = rule({ matchType: 'domain', matcher: 'google.com' });
+    const edit = { matchType: 'prefix' as const, matcher: SHEET_PREFIX };
+    expect(findConflictingRule(edit, SHEET_URL, SHEET_DOMAIN, [domain])).toBeNull();
+  });
+
+  // --- same-tier shadowing, the R-35 addition ---
+
+  it('reports a more specific DOMAIN rule shadowing a broader domain edit', () => {
+    // The case the old two-type check could not see at all.
+    const specific = rule({ matchType: 'domain', matcher: 'analytics.google.com' });
+    const edit = { matchType: 'domain' as const, matcher: 'google.com' };
+    expect(findConflictingRule(edit, GA4_URL, GA4_DOMAIN, [specific])).toBe(specific);
+  });
+
+  it('does not report a broader domain rule when editing the more specific one', () => {
+    const broad = rule({ matchType: 'domain', matcher: 'google.com' });
+    const edit = { matchType: 'domain' as const, matcher: 'analytics.google.com' };
+    expect(findConflictingRule(edit, GA4_URL, GA4_DOMAIN, [broad])).toBeNull();
+  });
+
+  it('reports a longer PREFIX rule shadowing a shorter prefix edit', () => {
+    const longer = rule({ matchType: 'prefix', matcher: SHEET_PREFIX });
+    const edit = { matchType: 'prefix' as const, matcher: 'https://docs.google.com/spreadsheets' };
+    expect(findConflictingRule(edit, SHEET_URL, SHEET_DOMAIN, [longer])).toBe(longer);
+  });
+
+  it('does not treat an equal-specificity rule as a conflict', () => {
+    // On a tie findBestRule keeps the earlier rule, so there is nothing useful
+    // to tell the user here.
+    const other = rule({ matchType: 'domain', matcher: 'google.co1' }); // same length
+    const edit = { matchType: 'domain' as const, matcher: 'google.com' };
+    expect(findConflictingRule(edit, GOOGLE_URL, GOOGLE_DOMAIN, [other])).toBeNull();
   });
 });

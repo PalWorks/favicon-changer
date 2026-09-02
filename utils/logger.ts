@@ -6,6 +6,16 @@
 const LOG_KEY = 'debug_logs';
 const LOG_ENABLED_KEY = 'enable_debug_logging';
 
+// Ring buffer size for the persisted log.
+const MAX_LOG_LINES = 1000;
+
+// How long entries are held in memory before being written as one batch. Every
+// line used to be its own read-modify-write of the whole array, so concurrent
+// writers (the content script and the popup) overwrote each other and lost
+// entries, exactly when the log was being relied on (LIMITATIONS L-16). Kept
+// short because the popup dies on blur and would take a pending batch with it.
+const FLUSH_DELAY_MS = 250;
+
 export enum LogLevel {
     INFO = 'INFO',
     WARN = 'WARN',
@@ -36,6 +46,57 @@ const ensureInit = (): Promise<void> => {
     }
     return initPromise;
 };
+
+// --- Batched persistence ---
+
+let pending: string[] = [];
+let flushTimer: any = null;
+// Flushes are chained rather than run concurrently, so two of them can never
+// interleave their read-modify-write of the log array.
+let flushChain: Promise<void> = Promise.resolve();
+
+const flushNow = (): Promise<void> => {
+    if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+    }
+    if (!pending.length) return flushChain;
+
+    const batch = pending;
+    pending = [];
+
+    flushChain = flushChain.then(async () => {
+        try {
+            const result = await chrome.storage.local.get(LOG_KEY);
+            const logs = (result[LOG_KEY] as string[]) || [];
+            logs.push(...batch);
+            // splice, not shift: a batch can push the array several entries past
+            // the cap, and shift would only drop one of them.
+            if (logs.length > MAX_LOG_LINES) logs.splice(0, logs.length - MAX_LOG_LINES);
+            await chrome.storage.local.set({ [LOG_KEY]: logs });
+        } catch (e) {
+            console.error('Failed to save logs:', e);
+        }
+    });
+
+    return flushChain;
+};
+
+const scheduleFlush = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+        flushTimer = null;
+        flushNow();
+    }, FLUSH_DELAY_MS);
+};
+
+// The popup is destroyed the moment it loses focus, so anything still pending
+// would be lost with it. Not available in the service worker, hence the guard.
+try {
+    if (typeof addEventListener === 'function') {
+        addEventListener('pagehide', () => { flushNow(); });
+    }
+} catch { /* no window in this context */ }
 
 export const logger = {
     async isEnabled(): Promise<boolean> {
@@ -80,16 +141,15 @@ export const logger = {
         // Persist to storage only while logging is enabled.
         if (!enabled) return;
 
-        try {
-            const result = await chrome.storage.local.get(LOG_KEY);
-            const logs = (result[LOG_KEY] as string[]) || [];
-            logs.push(logEntry);
-            // Keep last 1000 logs if enabled (more verbose)
-            if (logs.length > 1000) logs.shift();
-            await chrome.storage.local.set({ [LOG_KEY]: logs });
-        } catch (e) {
-            console.error('Failed to save log:', e);
-        }
+        pending.push(logEntry);
+        // Guard against unbounded growth if a flush keeps failing.
+        if (pending.length > MAX_LOG_LINES) pending.splice(0, pending.length - MAX_LOG_LINES);
+        scheduleFlush();
+    },
+
+    /** Writes any buffered entries immediately. */
+    async flush() {
+        await flushNow();
     },
 
     async info(message: string, data?: any) {
@@ -109,16 +169,24 @@ export const logger = {
     },
 
     async clear() {
+        pending = [];
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+        }
         await chrome.storage.local.remove(LOG_KEY);
         console.log('Logs cleared');
     },
 
     async getLogs(): Promise<string[]> {
+        // Include anything still buffered, so the viewer never looks stale.
         const result = await chrome.storage.local.get(LOG_KEY);
-        return (result[LOG_KEY] as string[]) || [];
+        const stored = (result[LOG_KEY] as string[]) || [];
+        return pending.length ? [...stored, ...pending] : stored;
     },
 
     async downloadLogs() {
+        await flushNow();
         const logs = await this.getLogs();
         const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);

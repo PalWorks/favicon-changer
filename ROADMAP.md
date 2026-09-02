@@ -42,6 +42,14 @@ changes.
 | R-07 | Harden rules import | S | Every rule rebuilt field by field in `utils/importRules.ts`; 31 tests. Rejects reported per rule with a reason |
 | R-12 | Icon and store-asset sizes | S | `128.png` is now truly 128x128; both promo tiles regenerated at the verified store sizes, with masters kept |
 | R-28 | 231 KB logo for a 32px render | S | Replaced by a 160px `logo.png`; the master moved out of `public/`. Package down from 577 KB to 381 KB |
+| R-35 | Conflict detector, same-tier shadowing | S | Rewritten to score the candidate and look for anything that outscores it, so it covers every shadowing case with one path |
+| R-25 | Misleading fallback-favicon copy | S | Copy now says it applies to every unmatched site, with a warning while it is active. Behaviour unchanged; the promise was the bug |
+| R-33 | Per-rule enable/disable | S | A pause switch per rule. Paused rules never match and never shadow |
+| R-27 | Storage-usage meter | S | Bytes used against quota, warning band from 75%, self-refreshing |
+| R-20 | Log-write races | S | Buffered and batched every 250 ms, flushes chained, forced on `pagehide` |
+| R-16 | Dependency hygiene | S | `npm audit` in the pre-push hook, production scope blocking. Fixed 6 high-severity dev advisories (vite 6.4.1 to 6.4.3) |
+| R-37 | Undecodable icon showed a broken glyph | S | `FaviconPreview` checks the element, not just the events (L-31) |
+| R-38 | Dev server bound to `0.0.0.0` | S | Localhost only; `npm run dev -- --host` is the opt-in (L-32) |
 
 Table name: **roadmap-done**
 
@@ -49,9 +57,10 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-35 | Conflict detector, same-tier shadowing | S | **pending** | Partly done: the detector now spans all tiers, but same-tier is still uncovered |
-| R-33 | Per-rule enable/disable | S | **pending** | Cheapest support-load reducer left; today you must delete a rule to test it |
-| R-27 | Storage-usage meter | S | **pending** | "Storage full" still arrives with no warning |
+| R-14 | Close the test gaps | M | **pending** | 99 tests now, but `validation`, the storage migration and `normalizeImageDataUrl` are still untested, and nothing locks ADR-001 |
+| R-09 | `notifyTabs` fan-out | M | **pending** | One rule save still pings every open tab, discarded ones included |
+| R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
+| R-32 | Rules list search and sort | M | **pending** | Pause is done (R-33); search, sort and bulk delete are not |
 
 Table name: **roadmap-next**
 
@@ -64,13 +73,6 @@ browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (A
 
 | ID | Item | Tier | Effort | Note |
 |---|---|---|---|---|
-| R-25 | Global fallback applies to every unmatched page | 2 | S | Copy says "if a site has no favicon"; it does not mean that |
-| R-09 | `notifyTabs` fans out to every tab | 2 | M | One save pings every open tab, discarded ones included |
-| R-20 | Log-write races | 2 | S | Read-modify-write per line loses entries when it matters most |
-| R-14 | Test gaps | 3 | M | `validation`, the migration latch, `normalizeImageDataUrl`, `isRestrictedUrl`, a jsdom lock on ADR-001 |
-| R-15 | Extract the editor's logic into a hook | 3 | M | ~520 lines and a `mode` × `context` matrix; R-01/R-02 add more |
-| R-16 | Dependency hygiene | 3 | S | `npm audit` in the hook, Dependabot |
-| R-32 | Rules list does not scale | 4 | M | No search, sort, filter or bulk delete |
 | R-30 | Accessibility pass | 4 | S | Icon-only buttons lack `aria-label`; the logging switch lacks a label |
 | R-21 | Emoji rendered at 64px | 4 | S | Everything else is 128px |
 | R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
@@ -78,6 +80,8 @@ browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (A
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
 | R-17 | Security contact | 5 | S | No inbound vulnerability channel |
 | R-36 | Icon artwork fills 122x122 of its 128x128 canvas | 4 | S | Chrome suggests ~96x96 so icons look consistent side by side. A branding call, not a rejection risk |
+| R-39 | No store screenshots exist | 4 | S | The listing requires at least one at 1280x800 or 640x400. Blocks a listing update, needs real UI captures |
+| R-40 | Dependabot | 3 | S | The audit gate is local only, so nothing tells you about a new advisory until you next push |
 
 Table name: **roadmap-pending**
 
@@ -317,18 +321,18 @@ available to decide that.
 `getPlatformInfo()` versus a UA regex, in two files, able to disagree (L-15). Resolve once in the
 service worker, store the verdict, and have the UI read it.
 
-### R-25 · Make the global fallback mean what it says · **S**
+### R-25 · Make the global fallback mean what it says · **S** · ✅ done 2026-09-02
 Either restrict `defaultFaviconUrl` to pages that genuinely have no icon of their own (matching
 the settings copy), or rewrite the copy to "apply to all sites without a rule" and add a
 confirmation. The current mismatch reads as the extension going rogue (L-06).
 
-### R-20 · Fix log-write races · **S**
+### R-20 · Fix log-write races · **S** · ✅ done 2026-09-02
 Batch or queue the `debug_logs` read-modify-write (L-16). Lost lines are worst exactly when the
 log matters.
 
 ---
 
-### R-35 · Widen the conflict detector to same-tier shadowing · **S** · *new, from R-04*
+### R-35 · Widen the conflict detector to same-tier shadowing · **S** · ✅ done 2026-09-02
 Now that a longer domain matcher beats a shorter one, a domain rule can be shadowed by another
 domain rule, which `findConflictingRule` does not detect: it still only looks for an `exact_url`
 or `regex` rule shadowing a domain-scoped edit. Scoring the rule being edited against every
@@ -384,22 +388,69 @@ immediately after, not in the middle.
 ### R-29 · Clean the build config · **S** · ✅ done 2026-09-02
 Remove the unused `loadEnv`/`env` and the empty `define: {}` in `vite.config.ts` (L-28).
 
-### R-16 · Dependency hygiene · **S**
+### R-16 · Dependency hygiene · **S** · ✅ done 2026-09-02
 Add `npm audit --production` to CI and enable Dependabot. Two runtime dependencies makes this
 cheap to keep green (threat 5).
+
+**Outcome.** `npm audit` runs in the pre-push hook. Production scope blocks the push; dev-only
+advisories are printed without blocking, since they are frequent and do not reach users; an
+audit that cannot reach the registry is reported as inconclusive so an offline push still works.
+
+This immediately found something: production dependencies were clean, but **six high-severity
+advisories were open against the pinned Vite**, all in its dev server (path traversal in
+optimized-deps `.map` handling, arbitrary file read over the dev-server websocket, and an
+`fs.deny` bypass). Fixed inside the existing `^6.2.0` range, 6.4.1 to 6.4.3.
+
+Following that thread found R-38: `vite.config.ts` bound the dev server to `0.0.0.0`, so those
+advisories were reachable from the whole LAN and any VPN interface while `npm run dev` ran. Now
+localhost-only. Dependabot is not set up, tracked as R-40.
 
 ### R-26 · Add `updatedAt`, stop overwriting `createdAt` · **S** · ✅ done 2026-09-02
 The rules list's "Created" column is really last-modified (L-10).
 
 ---
 
+### R-37 · Undecodable icon showed a broken glyph · **S** · ✅ done 2026-09-02
+A `data:` URL that is well-formed but not a decodable image leaves a 0x0 image and fires **load**,
+not error, and a data URL can finish loading before React attaches the handlers, so neither fired.
+`FaviconPreview` now also checks the element for `complete && naturalWidth === 0`. Reachable
+through import, since decodability cannot be checked at import time. Found while verifying R-33
+against deliberately broken test data. See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) L-31.
+
+### R-38 · Dev server bound to every network interface · **S** · ✅ done 2026-09-02
+`vite.config.ts` set `host: '0.0.0.0'`, putting `npm run dev` on the LAN and on any VPN or
+tailnet interface, while Vite's dev server had four open path-traversal and arbitrary-file-read
+advisories. Now localhost-only, with `npm run dev -- --host` as the explicit opt-in. See
+[docs/SECURITY.md](docs/SECURITY.md) threat 6 and L-32.
+
+### R-36 · Icon artwork is larger than Chrome suggests · **S**
+`public/icons/128.png` is a correct 128x128, but its artwork fills about 122x122 where Chrome
+asks for roughly 96x96 so icons look consistent beside each other in the store and the toolbar.
+Purely a branding call, not a rejection risk, and changing it makes the icon visibly smaller,
+so it needs a decision rather than a patch. Regenerating is one line in the script recorded in
+[store-assets/README.md](store-assets/README.md).
+
+### R-39 · No store screenshots exist · **S** · *blocks a listing update*
+The listing requires at least one screenshot at 1280x800 or 640x400, up to five. None are in the
+repo. These have to be real captures of the popup and settings page, so they cannot be generated
+from the design masters. Good candidates: the four-way scope selector with a prefix pattern and
+its live tab match, the emoji picker, the badge editor, and the rules list.
+
+### R-40 · Dependabot · **S**
+The audit gate added by R-16 is local and only runs on push, so a new advisory is invisible until
+someone next pushes. Dependabot would report it on a schedule. Weigh against the constraint of
+keeping GitHub automation minimal (ADR-012): Dependabot is a config file rather than an Actions
+workflow, so it does not consume Actions minutes, but it does open pull requests.
+
+---
+
 ## Tier 4: product depth
 
-### R-27 · Storage-usage meter · **S**
+### R-27 · Storage-usage meter · **S** · ✅ done 2026-09-02
 Show used/available in settings, with a warning band, so "Storage full" is never a surprise
 (L-12). `chrome.storage.local.getBytesInUse()` already exists.
 
-### R-33 · Per-rule enable/disable toggle · **S**
+### R-33 · Per-rule enable/disable toggle · **S** · ✅ done 2026-09-02
 Today the only way to test whether a rule is the culprit is to delete it (L-11). A boolean on the
 rule plus a switch in the list. Also the cheapest possible support tool.
 

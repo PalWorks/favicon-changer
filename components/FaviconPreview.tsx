@@ -14,19 +14,35 @@ export const FaviconPreview: React.FC<FaviconPreviewProps> = ({ url, size = 'md'
   };
 
   const [hasError, setHasError] = React.useState(false);
+  const imgRef = React.useRef<HTMLImageElement>(null);
 
   React.useEffect(() => {
     setHasError(false);
   }, [url]);
 
+  // A `data:` URL that is well-formed but not a decodable image leaves a 0x0
+  // image, and can finish "loading" before React attaches onLoad/onError, so
+  // neither handler ever fires and the browser's broken-image glyph shows
+  // instead of the fallback below. An imported rule can carry one, since
+  // decodability cannot be checked at import time. So check the element itself
+  // as well as listening for the events.
+  React.useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) setHasError(true);
+  }, [url, hasError]);
+
   return (
     <div className={`relative overflow-hidden rounded-lg bg-white shadow-sm border border-slate-200 flex items-center justify-center p-1 ${sizes[size]}`}>
       {url && !hasError ? (
         <img
+          ref={imgRef}
           src={url}
           alt={alt}
           className="max-w-full max-h-full object-contain"
           onError={() => setHasError(true)}
+          onLoad={(e) => {
+            if (e.currentTarget.naturalWidth === 0) setHasError(true);
+          }}
         />
       ) : (
         <div className="text-slate-300 bg-slate-50 w-full h-full flex items-center justify-center">
