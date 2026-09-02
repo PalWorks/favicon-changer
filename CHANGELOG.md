@@ -68,6 +68,15 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   takes `size?: 'sm' | 'md'` and keeps it out of the DOM.
 - Em dashes removed from the three user-facing strings that contained them.
 
+### Changed
+- **The packaged extension is a third smaller**, 577 KB down to 381 KB. The 497px logo master
+  was being shipped for a header drawn at 32 to 40 CSS pixels; a 160px version ships instead and
+  the master moved to `store-assets/masters/`.
+- `icons/128.png` is now a true 128x128. It was 127x128.
+- Store promo tiles regenerated at the sizes Chrome actually requires, 440x280 and 1400x560, from
+  the original design masters with the composition unchanged. Specs and method recorded in
+  [store-assets/README.md](store-assets/README.md).
+
 ### Removed
 - Dead code, each symbol verified unreferenced across the whole repo first: `generateFavicon` and
   its `GenerateFaviconOptions`/`Shape` types, `EXTENSION_WIDTH`/`EXTENSION_HEIGHT`,

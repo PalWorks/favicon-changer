@@ -459,7 +459,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             {mode === 'popup' && (
                 <header className="bg-white border-b border-slate-200 p-4 sticky top-0 z-10 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <img src="icons/FaviconChangerLogo.png" alt="Logo" className="w-8 h-8 rounded-lg shadow-sm object-contain" />
+                        <img src="icons/logo.png" alt="Logo" className="w-8 h-8 rounded-lg shadow-sm object-contain" />
                         <h1 className="text-lg font-bold text-slate-800">Favicon Changer Ultimate</h1>
                     </div>
 

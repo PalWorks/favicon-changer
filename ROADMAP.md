@@ -40,6 +40,8 @@ changes.
 | R-01 | `prefix` match type | M | "URL Starts With", ranked above regex (ADR-013). Prefilled from the current page; verified covering one Sheets document across its sheets |
 | R-02 | Regex in the editor UI | S | Fourth scope option, not hidden behind an Advanced toggle. Live validation, escaped and anchored prefill, live open-tab match count |
 | R-07 | Harden rules import | S | Every rule rebuilt field by field in `utils/importRules.ts`; 31 tests. Rejects reported per rule with a reason |
+| R-12 | Icon and store-asset sizes | S | `128.png` is now truly 128x128; both promo tiles regenerated at the verified store sizes, with masters kept |
+| R-28 | 231 KB logo for a 32px render | S | Replaced by a 160px `logo.png`; the master moved out of `public/`. Package down from 577 KB to 381 KB |
 
 Table name: **roadmap-done**
 
@@ -47,13 +49,16 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-12 | Icon and store-asset sizes | S | **next** | The last thing between the code and a v1.4.0 listing update |
 | R-35 | Conflict detector, same-tier shadowing | S | **pending** | Partly done: the detector now spans all tiers, but same-tier is still uncovered |
+| R-33 | Per-rule enable/disable | S | **pending** | Cheapest support-load reducer left; today you must delete a rule to test it |
+| R-27 | Storage-usage meter | S | **pending** | "Storage full" still arrives with no warning |
 
 Table name: **roadmap-next**
 
-**v1.4.0 is code-complete apart from R-12.** What it contains: prefix matching, a regex UI,
-specificity-based precedence, hardened import, and the Tier 2 bug batch.
+**v1.4.0 is code-complete and ready to package.** It contains prefix matching, a regex UI,
+specificity-based precedence, hardened import, correctly sized store assets, a third smaller
+package, and the Tier 2 bug batch. The one thing standing between it and the store is the manual
+browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (ADR-012 note).
 
 ### Pending
 
@@ -65,16 +70,14 @@ specificity-based precedence, hardened import, and the Tier 2 bug batch.
 | R-14 | Test gaps | 3 | M | `validation`, the migration latch, `normalizeImageDataUrl`, `isRestrictedUrl`, a jsdom lock on ADR-001 |
 | R-15 | Extract the editor's logic into a hook | 3 | M | ~520 lines and a `mode` × `context` matrix; R-01/R-02 add more |
 | R-16 | Dependency hygiene | 3 | S | `npm audit` in the hook, Dependabot |
-| R-27 | Storage-usage meter | 4 | S | "Storage full" currently arrives with no warning |
-| R-33 | Per-rule enable/disable | 4 | S | Today you must delete a rule to test whether it is the culprit |
 | R-32 | Rules list does not scale | 4 | M | No search, sort, filter or bulk delete |
 | R-30 | Accessibility pass | 4 | S | Icon-only buttons lack `aria-label`; the logging switch lacks a label |
 | R-21 | Emoji rendered at 64px | 4 | S | Everything else is 128px |
-| R-28 | 231 KB logo for a 32px render | 4 | S | About 40% of the package |
 | R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
 | R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
 | R-17 | Security contact | 5 | S | No inbound vulnerability channel |
+| R-36 | Icon artwork fills 122x122 of its 128x128 canvas | 4 | S | Chrome suggests ~96x96 so icons look consistent side by side. A branding call, not a rejection risk |
 
 Table name: **roadmap-pending**
 
@@ -273,7 +276,7 @@ or http(s) only, which rejects `javascript:`, `data:text/html` and `file:`), a 2
 attribute. This is where `isValidBadgeText` finally gets wired up, as R-18 promised. Failures are
 reported per rule with a reason instead of being dropped silently.
 
-### R-12 · Fix icon and store-asset dimensions · **S**
+### R-12 · Fix icon and store-asset dimensions · **S** · ✅ done 2026-09-02
 `icons/128.png` is 127×128 (L-25). Promo tiles are 1200×896 and 1632×656 against documented
 sizes of 440×280 and 1400×560 (L-26), *verify current requirements in the dashboard before
 re-exporting*. Needed for a clean listing update alongside the release.

@@ -61,7 +61,7 @@ const OptionsApp: React.FC = () => {
                     {/* ... (rest of the component) */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <img src="icons/FaviconChangerLogo.png" alt="Logo" className="w-10 h-10 rounded-lg shadow-md object-contain" />
+                            <img src="icons/logo.png" alt="Logo" className="w-10 h-10 rounded-lg shadow-md object-contain" />
                             <div>
                                 <h1 className="text-2xl font-bold text-slate-800">Favicon Changer Ultimate</h1>
                                 <p className="text-slate-500">Advanced settings and rule management</p>
