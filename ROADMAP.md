@@ -58,6 +58,13 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-32 | Rules list search and sort | M | (2026-09-06) Search, type filter with counts, three sort orders, and multi-select with a batched bulk delete |
 | R-21 | Emoji rendered at 64px | S | (2026-09-06) Now 128px like every other source, with headroom for tall glyphs |
 | R-30 | Accessibility pass | S | (2026-09-06) Every control has an accessible name (30 of 30 audited), status messages are announced, switches expose state |
+| R-45 | Live favicon change did nothing on pages that list `apple-touch-icon` first | S | (2026-09-06) `updateFavicon` mutated the wrong link and deleted the one Chrome paints from. Found by driving the loaded extension in a real browser; reproduced on en.wikipedia.org and fixed |
+| R-43 | Our icon lost to any SPA that reasserts its own | S | (2026-09-06) The observer skipped every mutation on the element we had marked, which is the element such a page keeps rewriting. On screen 7% of the time before, wins within 150 ms now |
+| R-42 | Prefix and regex prefill never followed the address field | S | (2026-09-06) Picking the scope before typing the URL, which is the normal order on the settings page, left the pattern empty or holding the previous rule's text |
+| R-44 | The wrong icon was restored when a rule was deleted | S | (2026-09-06) An `apple-touch-icon` was captured as "the original"; sibling icon links are also no longer destroyed |
+| R-17 | Security contact | S | (2026-09-06) support@palworks.ai published in docs/SECURITY.md and the privacy policy, with a three-working-day acknowledgement |
+| R-40 | Dependabot | S | (2026-09-06) `.github/dependabot.yml`, grouped and weekly. Config only, no Actions minutes (ADR-012 holds) |
+| R-36 | Icon artwork oversized | S | (2026-09-06) `128.png` regenerated from the 497px master at 94x96 inside the 128 canvas, the ~96x96 Chrome asks for. 22 KB to 15 KB |
 
 Table name: **roadmap-done**
 
@@ -70,10 +77,12 @@ Table name: **roadmap-done**
 
 Table name: **roadmap-next**
 
-**v1.4.0 is code-complete and ready to package.** It contains prefix matching, a regex UI,
-specificity-based precedence, hardened import, correctly sized store assets, a third smaller
-package, and the Tier 2 bug batch. The one thing standing between it and the store is the manual
-browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (ADR-012 note).
+**v1.4.0 is code-complete. v1.4.1 carries the three runtime bugs found after it.** 1.4.0 brought
+prefix matching, a regex UI, specificity-based precedence, hardened import, correctly sized store
+assets, a third smaller package and the Tier 2 bug batch. Driving the loaded extension in a real
+browser then found R-42, R-43, R-44 and R-45, of which R-45 broke the product's core promise on a
+large class of sites. Items 1 to 6 of the manual list in [docs/TESTING.md](docs/TESTING.md) now
+run under the DevTools protocol against a real Chrome, so they are no longer a manual gate.
 
 ### Pending
 
@@ -82,9 +91,6 @@ browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (A
 | R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
 | R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
-| R-17 | Security contact | 5 | S | No inbound vulnerability channel |
-| R-36 | Icon artwork fills 122x122 of its 128x128 canvas | 4 | S | Chrome suggests ~96x96 so icons look consistent side by side. A branding call, not a rejection risk |
-| R-40 | Dependabot | 3 | S | The audit gate is local only, so nothing tells you about a new advisory until you next push |
 
 Table name: **roadmap-pending**
 
@@ -107,15 +113,17 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.3.0 (manifest and `package.json` now aligned) |
+| Version | 1.4.1 (manifest and `package.json` aligned) |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
 | Users | 983 |
 | Rating | 4.4 ★ from 7 ratings |
 | Category | Developer Tools |
-| Tests | 20, one file, matcher only |
+| Tests | 190 across 8 files, including a jsdom lock on the favicon write path |
 | `tsc --noEmit` | clean |
-| Pre-push gate | typecheck + tests + build via `.githooks/pre-push` (no CI workflow, ADR-012) |
-| CI | none |
+| Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
+| CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
+| Runtime verification | Items 1 to 6 of docs/TESTING.md, driven over the DevTools protocol against a real Chrome |
+| Security contact | support@palworks.ai |
 
 Table name: **product-snapshot**
 
@@ -352,6 +360,63 @@ or `regex` rule shadowing a domain-scoped edit. Scoring the rule being edited ag
 other rule would cover every shadowing case with one code path, and would let the banner name
 the winner instead of describing its type.
 
+### R-45 · Live favicon change did nothing on pages that list `apple-touch-icon` first · **S** · ✅ done 2026-09-06
+The highest-value bug in this batch, and one only a real browser could find. `updateFavicon` took
+`iconLinks[0]`, the first element matching `link[rel*='icon']`. On any page whose head lists
+`<link rel="apple-touch-icon">` before its favicon, and Wikipedia is one of a great many, that is
+not the element Chrome paints the tab from. We mutated that one and then deleted the real
+`<link rel="icon">` on the next line, leaving Chrome tracking a node that no longer existed. The
+result: adding a rule to an already-open page changed nothing at all until the page was reloaded,
+which is exactly the failure ADR-001 exists to prevent. It went unnoticed because a reload always
+worked, and because the local test pages all had a single icon link.
+
+Fixed by choosing the link Chrome actually paints from: one we already own, else the first link
+whose `rel` contains `icon` and is not `apple-touch-icon`, `apple-touch-icon-precomposed`,
+`mask-icon` or `fluid-icon`, else the first icon-ish link, else a new one. The sibling sweep now
+removes only competing tab favicons and leaves the rest alone, so a page keeps its home-screen and
+pinned-tab artwork. Three new jsdom cases lock it in. Verified live on en.wikipedia.org in both an
+active and a background tab: before, no repaint at all; after, both repaint without a reload.
+
+### R-43 · Our icon lost to any SPA that reasserts its own · **S** · ✅ done 2026-09-06
+The MutationObserver opened by skipping any mutation whose target carried our ownership mark. That
+looks right and is exactly wrong: `updateFavicon` repurposes the link Chrome already tracks
+(ADR-001) and marks *that* element, so on a page that reasserts its own icon the page keeps
+rewriting the very element we marked, and every one of those writes was filtered out as if it were
+ours. Only the 2 s backup poller ever noticed.
+
+Measured against a page rewriting its icon every 300 ms: our icon was on screen for about 150 ms
+out of every 2 s, roughly 7% of the time, with a visible flicker. The mark cannot answer "who
+wrote this", so the href value does instead: if the icon link already points at our URL the write
+was ours, otherwise the page changed it and we re-apply. That also makes a loop impossible, since
+our own re-apply produces a mutation whose href matches and is ignored. After the fix, on a page
+that reasserts eight times and stops (an ordinary SPA), our icon is restored within 150 ms of each
+write and holds from then on. On a page that reasserts unconditionally for ever, the two alternate;
+that is inherent, and the 100 ms debounce caps the cost. See LIMITATIONS L-33.
+
+### R-44 · The wrong icon came back when a rule was deleted · **S** · ✅ done 2026-09-06
+`readOriginalFaviconHref` returned the first unmarked `link[rel*='icon']`, so on Wikipedia it
+captured the `apple-touch-icon` and restored that in place of the real favicon. `updateFavicon`
+also deleted every other icon link, so the page could not recover them without a reload. Both are
+fixed by the same preference used for R-45. Four new jsdom cases. Verified live: deleting a rule
+on a background Wikipedia tab now restores `favicon/wikipedia.ico` in about a second, and the
+`apple-touch-icon` link is still there afterwards.
+
+### R-42 · Prefix and regex prefill never followed the address field · **S** · ✅ done 2026-09-06
+`selectScope` built the suggested pattern from whatever URL was known at the moment the scope
+button was clicked, and nothing regenerated it afterwards. On the settings page the URL field
+starts empty and the scope is normally picked first, so the pattern field stayed empty however
+much the user then typed, and the save failed with a message about prefixes needing to start at
+the beginning of the address. Worse, after saving one rule the field kept the previous rule's
+text, so a prefix rule could be saved silently against the wrong site.
+
+A `patternEdited` flag now separates a suggestion from the user's own text: a suggestion is
+re-derived whenever the target URL changes, the user's text never is. Editing the field, loading a
+saved rule, and the popup-to-window handoff all set it; switching scope, and the "Suggest from
+this page" button, clear it. Verified live in the loaded extension: scope first then typing gives
+`https://docs.google.com/spreadsheets/d/ABC123` from a full Sheets URL, changing the address
+follows it, a hand-edited pattern survives a later address change, and switching to Regex
+regenerates in the other syntax.
+
 ---
 
 ## Tier 3: engineering hygiene
@@ -451,12 +516,14 @@ tailnet interface, while Vite's dev server had four open path-traversal and arbi
 advisories. Now localhost-only, with `npm run dev -- --host` as the explicit opt-in. See
 [docs/SECURITY.md](docs/SECURITY.md) threat 6 and L-32.
 
-### R-36 · Icon artwork is larger than Chrome suggests · **S**
-`public/icons/128.png` is a correct 128x128, but its artwork fills about 122x122 where Chrome
-asks for roughly 96x96 so icons look consistent beside each other in the store and the toolbar.
-Purely a branding call, not a rejection risk, and changing it makes the icon visibly smaller,
-so it needs a decision rather than a patch. Regenerating is one line in the script recorded in
-[store-assets/README.md](store-assets/README.md).
+### R-36 · Icon artwork is larger than Chrome suggests · **S** · ✅ done 2026-09-06
+`public/icons/128.png` was a correct 128x128 whose artwork filled about 122x122, where Chrome
+asks for roughly 96x96 so icons line up with each other. Regenerated from
+`store-assets/masters/logo-source-497px.png` at 94x96 centred in the 128 canvas, 16 to 17 px of
+transparent padding on every side, and 22 KB down to 15 KB. `16.png` and `48.png` are deliberately
+left filling their canvases: the padding guidance is for the 128 used by the store and
+`chrome://extensions`, while those two are the toolbar and management icons, which should not
+shrink.
 
 ### R-39 · No store screenshots exist · **S** · *blocks a listing update*
 The listing requires at least one screenshot at 1280x800 or 640x400, up to five. None are in the
@@ -464,11 +531,14 @@ repo. These have to be real captures of the popup and settings page, so they can
 from the design masters. Good candidates: the four-way scope selector with a prefix pattern and
 its live tab match, the emoji picker, the badge editor, and the rules list.
 
-### R-40 · Dependabot · **S**
-The audit gate added by R-16 is local and only runs on push, so a new advisory is invisible until
-someone next pushes. Dependabot would report it on a schedule. Weigh against the constraint of
-keeping GitHub automation minimal (ADR-012): Dependabot is a config file rather than an Actions
-workflow, so it does not consume Actions minutes, but it does open pull requests.
+### R-40 · Dependabot · **S** · ✅ done 2026-09-06
+The audit gate added by R-16 is local and only runs on push, so a new advisory was invisible until
+someone next pushed. `.github/dependabot.yml` now raises weekly npm updates, grouped into at most
+one production and one development pull request, capped at three open. It is compatible with
+ADR-012 because Dependabot runs on GitHub's own infrastructure rather than an Actions runner, so it
+consumes no Actions minutes and nothing in the repository runs on a push or a pull request. The
+pull requests are reviewed and merged by hand, and the pre-push hook is still what runs the type
+check, the tests, the build and the audit.
 
 ---
 
@@ -546,9 +616,11 @@ Not a storage-area swap: `storage.sync`'s ~8 KB per-item limit cannot hold a PNG
 (ADR-004, L-22). Requires either syncing rules while keeping icons local, or an icon store that
 is not inline data URLs. Design before estimating.
 
-### R-17 · Publish a security contact · **S**
-No inbound vulnerability channel exists beyond the store support page
-([docs/SECURITY.md](docs/SECURITY.md)).
+### R-17 · Publish a security contact · **S** · ✅ done 2026-09-06
+support@palworks.ai, published in [docs/SECURITY.md](docs/SECURITY.md) and in the privacy policy,
+with the reporting expectations written down: private report first, extension version and browser
+build, acknowledgement within three working days, no bug bounty. The store review queue is still
+the floor on how fast a fix can reach installed copies, which the section says plainly.
 
 ---
 

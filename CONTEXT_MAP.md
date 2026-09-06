@@ -68,6 +68,7 @@ docs/
   SECURITY.md          threat model, CSP, permissions, data handling
   LIMITATIONS.md       L-01..L-28 known defects, incl. verified dead-code inventory
 
+.github/               Dependabot config only, no workflows (ADR-012)
 store-assets/          Chrome Web Store listing images
 agent_docs_guide.md    the general guide this doc set was structured from
 ```

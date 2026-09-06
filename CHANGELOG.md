@@ -10,6 +10,14 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+---
+
+## [1.4.1]: 2026-09-06
+
+Three bugs found by driving the loaded extension in a real browser for the first time, rather
+than reasoning about it. One of them broke the core promise, changing a favicon without a
+reload, on a large share of the web.
+
 ### Added
 - **The rules list is searchable, filterable and sortable**, with filter chips per match type
   showing how many rules each has, and sorting by newest, oldest or alphabetically. The heading
@@ -22,6 +30,31 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   controls named, none unreachable by keyboard.
 - **Bulk delete.** Tick several rules, or "select all shown", and remove them in one action. It is
   a single storage write and a single notification to open tabs, rather than one of each per rule.
+
+### Fixed
+- **Setting a favicon did nothing until the page was reloaded, on any site that lists an
+  `apple-touch-icon` before its favicon.** That is a large share of the web; Wikipedia is one.
+  The extension was changing the wrong icon link and deleting the one the browser actually paints
+  the tab from, so the tab kept its old icon until it was reloaded. It now changes the right one,
+  and leaves home-screen and pinned-tab icons alone instead of deleting them.
+- **Your icon lost to sites that set their own favicon repeatedly**, the unread-count kind. The
+  extension mistook the site's changes for its own and only corrected them every two seconds, so
+  the icon flickered between the two. It now restores your icon within a fraction of a second.
+- **Deleting a rule could restore the wrong icon**, the home-screen one instead of the site's
+  real favicon, on those same sites.
+- **"URL Starts With" and "Regex" now fill in a suggested pattern as you type the address.**
+  Choosing the match type before typing the address, which is the natural order on the settings
+  page, used to leave the pattern box empty, and after saving one rule it kept the previous
+  rule's text. Your own edits are never overwritten.
+
+### Changed
+- The 128px icon is now sized the way Chrome asks, with padding, so it sits consistently beside
+  other extensions in the store and on the extensions page.
+- A security contact is published: **support@palworks.ai**, with what to include and a
+  three-working-day acknowledgement.
+- Dependency updates are raised weekly and grouped by Dependabot. It is a configuration file
+  rather than a workflow, so it runs on GitHub's own infrastructure and adds no CI.
+
 
 ---
 

@@ -97,14 +97,19 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
   `[Content]` and service-worker lines with `[BG]`. Never log page content or form values.
 - **No new dependencies** without asking. Two runtime dependencies is a feature.
 - **Keep GitHub Actions usage minimal.** Checks run in a local pre-push hook by decision; do not
-  add a workflow without asking. ADR-012.
+  add a workflow without asking. ADR-012. `.github/dependabot.yml` is not a workflow, it runs on
+  GitHub's own infrastructure and consumes no Actions minutes, which is why it is allowed.
+- **Never trust the DOM alone when changing the favicon write path.** The DOM can hold your icon
+  while the tab strip still shows the site's. Check the tab's `faviconUrl` over the DevTools
+  protocol, and for anything load-bearing, screenshot the window. ADR-001, ADR-014,
+  [docs/TESTING.md](docs/TESTING.md).
 
 ---
 
 ## 5. Definition of done
 
 ```bash
-npm run check         # typecheck + 20 tests, both must pass; add tests for logic you added
+npm run check         # typecheck + 190 tests, both must pass; add tests for logic you added
 npm run build         # must produce dist/ with both passes
 ```
 

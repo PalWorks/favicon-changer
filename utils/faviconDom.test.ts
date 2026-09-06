@@ -118,17 +118,60 @@ describe('updateFavicon: writes', () => {
     spy.mockRestore();
   });
 
-  it('removes the other icon links so a stale one cannot be picked', () => {
+  it('removes the other tab favicon links so a stale one cannot be picked', () => {
     setHead(`
       <link rel="icon" href="/a.png">
       <link rel="shortcut icon" href="/b.ico">
-      <link rel="apple-touch-icon" href="/c.png">
     `);
     const kept = icons()[0];
 
     updateFavicon(ICON);
 
     expect(icons()).toEqual([kept]);
+  });
+
+  // R-45. Wikipedia lists apple-touch-icon first. Mutating that one repaints
+  // nothing, because it is not the element Chrome paints the tab from, and
+  // deleting the real favicon link on top of it left Chrome tracking a node
+  // that no longer existed. Adding a rule to an open page then did nothing
+  // until the page was reloaded, which is exactly what ADR-001 exists to stop.
+  it('mutates the real favicon link, not an apple-touch-icon listed first', () => {
+    setHead(`
+      <link rel="apple-touch-icon" href="/apple.png">
+      <link rel="icon" href="/favicon.ico">
+    `);
+    const apple = icons()[0];
+    const favicon = icons()[1];
+
+    updateFavicon(ICON);
+
+    expect(favicon.getAttribute('href')).toBe(ICON);
+    expect(favicon.hasAttribute(CHANGE_MARK)).toBe(true);
+    expect(apple.getAttribute('href')).toBe('/apple.png');
+    expect(apple.hasAttribute(CHANGE_MARK)).toBe(false);
+  });
+
+  it('leaves links that never reach the tab strip in place', () => {
+    setHead(`
+      <link rel="apple-touch-icon" href="/apple.png">
+      <link rel="mask-icon" href="/mask.svg">
+      <link rel="icon" href="/favicon.ico">
+    `);
+
+    updateFavicon(ICON);
+
+    expect(icons().map(l => l.getAttribute('href'))).toEqual(['/apple.png', '/mask.svg', ICON]);
+  });
+
+  it('falls back to an apple-touch-icon when the page has no real favicon', () => {
+    setHead('<link rel="apple-touch-icon" href="/apple.png">');
+    const only = icons()[0];
+
+    updateFavicon(ICON);
+
+    expect(icons()[0]).toBe(only);
+    expect(only.getAttribute('href')).toBe(ICON);
+    expect(only.getAttribute('rel')).toBe('icon');
   });
 
   it('leaves non-icon head elements alone', () => {
@@ -181,6 +224,29 @@ describe('readOriginalFaviconHref', () => {
   it('returns null on a page with no icon link', () => {
     setHead('<title>t</title>');
     expect(readOriginalFaviconHref()).toBeNull();
+  });
+
+  // Wikipedia lists apple-touch-icon before its real favicon, so a naive
+  // first-match captured the wrong icon and restored it after a rule was
+  // deleted. R-44.
+  it('prefers the tab favicon over an apple-touch-icon listed first', () => {
+    setHead('<link rel="apple-touch-icon" href="/apple.png"><link rel="icon" href="/favicon.ico">');
+    expect(readOriginalFaviconHref()).toBe('/favicon.ico');
+  });
+
+  it('accepts "shortcut icon" as the tab favicon', () => {
+    setHead('<link rel="mask-icon" href="/mask.svg"><link rel="shortcut icon" href="/favicon.ico">');
+    expect(readOriginalFaviconHref()).toBe('/favicon.ico');
+  });
+
+  it('falls back to the only icon-ish link when there is no real favicon', () => {
+    setHead('<link rel="apple-touch-icon" href="/apple.png">');
+    expect(readOriginalFaviconHref()).toBe('/apple.png');
+  });
+
+  it('still ignores our own link when choosing the preferred one', () => {
+    setHead(`<link rel="icon" href="/ours.png" ${CHANGE_MARK}="true"><link rel="apple-touch-icon" href="/apple.png">`);
+    expect(readOriginalFaviconHref()).toBe('/apple.png');
   });
 });
 

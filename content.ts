@@ -5,7 +5,6 @@ import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
 import { OBSERVER_DEBOUNCE_MS, MAX_STABLE_CHECKS } from './constants';
 import {
-  CHANGE_MARK,
   updateFavicon,
   readOriginalFaviconHref,
   removeMarkedFaviconLinks,
@@ -41,28 +40,35 @@ function setupObserver(targetUrl: string) {
   if (!head) return;
 
   // A. Mutation Observer for long-term changes
+  //
+  // Our own writes have to be told apart from the page's, and the ownership
+  // mark cannot do it. updateFavicon() repurposes the link Chrome is already
+  // tracking (ADR-001) and marks THAT element, so on an SPA that reasserts its
+  // own icon the page keeps rewriting the very element we marked. Skipping
+  // marked elements therefore filtered out every page write, leaving only the
+  // 2s backup poller to notice, and the site's icon won roughly 93% of the time
+  // with ours flickering in between (verified in a real browser, ROADMAP R-43).
+  //
+  // The href value is the honest test instead: if the icon link already points
+  // at our URL the write was ours, otherwise the page changed it and we
+  // re-apply. That also makes a loop impossible, since our own re-apply
+  // produces a mutation whose href matches and is ignored.
   observer = new MutationObserver((mutations) => {
     let shouldUpdate = false;
     for (const mutation of mutations) {
-      // Ignore changes to elements we marked
-      if (mutation.target instanceof Element && mutation.target.hasAttribute(CHANGE_MARK)) {
-        continue;
-      }
-
       if (mutation.type === 'childList') {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeName === 'LINK') {
             const link = node as HTMLLinkElement;
-            // If a new icon is added and it's NOT ours, we need to update
-            if (link.rel.includes('icon') && !link.hasAttribute(CHANGE_MARK)) {
+            // A new icon link pointing anywhere but at our icon displaces us.
+            if (link.rel.includes('icon') && link.getAttribute('href') !== targetUrl) {
               shouldUpdate = true;
             }
           }
         });
       } else if (mutation.type === 'attributes') {
         const link = mutation.target as HTMLLinkElement;
-        // If an icon attribute changed and it's NOT ours, update
-        if (link.nodeName === 'LINK' && link.rel.includes('icon') && !link.hasAttribute(CHANGE_MARK)) {
+        if (link.nodeName === 'LINK' && link.rel.includes('icon') && link.getAttribute('href') !== targetUrl) {
           shouldUpdate = true;
         }
       }

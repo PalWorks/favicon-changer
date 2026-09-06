@@ -1,0 +1,29 @@
+# Dependency updates, config only.
+#
+# Dependabot runs on GitHub's own infrastructure, not on Actions runners, so
+# this costs no Actions minutes. That is what makes it compatible with ADR-012,
+# which keeps CI on a local pre-push hook rather than a workflow. It opens pull
+# requests; nothing here runs tests, and nothing merges on its own. Every bump
+# is reviewed and pushed by hand, which is when the pre-push hook runs the type
+# check, the tests, the build and the audit.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    # One pull request per group rather than one per package, so a quiet week
+    # produces nothing and a busy one produces two reviewable branches.
+    groups:
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"

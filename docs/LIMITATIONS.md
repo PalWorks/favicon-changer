@@ -251,3 +251,26 @@ is only ever drawn at `w-8 h-8` (popup header) or `w-10 h-10` (options header).
 ### L-28 · Build config carried a removed feature's scar · *resolved 2026-09-02, R-29 done*
 `vite.config.ts` still calls `loadEnv` into an unused `env` and keeps an empty `define: {}` with a
 comment about removed Gemini API keys.
+
+### L-33 · A page that reasserts its favicon for ever will alternate with us · *open, by design*
+The MutationObserver re-applies our icon within the 100 ms debounce of any page write it did not
+make (ADR-014), so an ordinary SPA that reasserts its icon on an event loses within about 150 ms
+and our icon then holds. A page that reasserts unconditionally on a short timer is a different
+case: both sides keep writing, and the tab icon visibly alternates. Measured against a synthetic
+page rewriting every 300 ms, the split was roughly even, with the busiest renderer at 12% of one
+core, so the cost is bounded rather than a pinned core.
+
+No DOM-level approach can win this outright, since the page runs in the same document and can
+always write last. The options are to accept the alternation, to back off after N re-applies in a
+window (our icon then loses, but quietly), or to shorten the debounce (we win more often and write
+more). Accepting it is the current position, because no real site behaves this way; the synthetic
+case exists to bound the cost, not because it was observed in the wild.
+
+### L-34 · Background tabs keep their old icon across an extension update · *open, inherent*
+Reloading the extension kills the content script in every open tab. `notifyTabs` only injects into
+the active tab (R-09), so a background tab has nothing listening and keeps whatever icon it had
+until it is reloaded or navigated. This is the documented cost of not injecting into every tab on
+every rule change, and it surfaced while testing: after a `chrome.runtime.reload()`, the active
+tab picked up a new rule and background tabs did not. Users see it only after an update from the
+store, and only until they touch the tab.
+

@@ -17,6 +17,17 @@ import { logger } from './logger';
 // ignore our own writes instead of reacting to them.
 export const CHANGE_MARK = 'data-fc-modified';
 
+// rel values that contain the string "icon" but are never the tab-strip
+// favicon. A page that carries one of these first (Wikipedia does) would
+// otherwise have it captured as "the original" and restored in place of the
+// real favicon when a rule is deleted. ROADMAP R-44.
+const NON_FAVICON_RELS = ['apple-touch-icon', 'apple-touch-icon-precomposed', 'mask-icon', 'fluid-icon'];
+
+const isTabFaviconLink = (link: Element): boolean => {
+    const rels = (link.getAttribute('rel') || '').toLowerCase().split(/\s+/).filter(Boolean);
+    return rels.includes('icon') && !rels.some(rel => NON_FAVICON_RELS.includes(rel));
+};
+
 /**
  * Points the page's favicon at `url`, and returns whether a link now carries it.
  *
@@ -43,9 +54,18 @@ export const updateFavicon = (url: string): boolean => {
     // injection from special characters.
     const iconLinks = Array.from(document.querySelectorAll("link[rel*='icon']")) as HTMLLinkElement[];
 
-    // Reuse the element Chrome is already tracking: prefer one we own, else the
-    // page's own first icon link (the one Chrome started tracking at load).
-    let ourLink = iconLinks.find(link => link.hasAttribute(CHANGE_MARK)) || iconLinks[0];
+    // Reuse the element Chrome is already tracking for the tab strip: one we
+    // own, else the page's first REAL favicon link.
+    //
+    // Taking merely the first icon-ish link was wrong on any page that lists
+    // apple-touch-icon ahead of its favicon, which Wikipedia and a great many
+    // others do. We then mutated a link Chrome does not paint the tab from and
+    // deleted the one it does, so adding a rule to an already-open page changed
+    // nothing until the page was reloaded. Reproduced live on en.wikipedia.org
+    // and fixed here. ROADMAP R-45.
+    let ourLink = iconLinks.find(link => link.hasAttribute(CHANGE_MARK))
+        || iconLinks.find(isTabFaviconLink)
+        || iconLinks[0];
 
     if (ourLink) {
         // Mutating href on the tracked element is what triggers the repaint,
@@ -67,26 +87,29 @@ export const updateFavicon = (url: string): boolean => {
         logger.debug('[Content] Appended new favicon link');
     }
 
-    // Remove any remaining icon links so the browser cannot pick a stale one.
+    // Remove the remaining TAB favicon links so the browser cannot pick a stale
+    // one. Links that never reach the tab strip (apple-touch-icon, mask-icon,
+    // fluid-icon) are left where they are: deleting them changed nothing we
+    // wanted and cost the page its home-screen and pinned-tab artwork.
     iconLinks.forEach(link => {
-        if (link !== ourLink) link.remove();
+        if (link !== ourLink && isTabFaviconLink(link)) link.remove();
     });
 
     return true;
 };
 
 /**
- * The href of the page's own icon link, i.e. the first one we have not marked.
+ * The href of the page's own icon link, i.e. one we have not marked.
  * Used to remember what to restore when a rule is deleted.
+ *
+ * Prefers a link the browser would actually use for the tab strip, and only
+ * falls back to the first unmarked icon-ish link if the page has no such thing.
  */
 export const readOriginalFaviconHref = (): string | null => {
-    const links = document.querySelectorAll("link[rel*='icon']");
-    for (let i = 0; i < links.length; i++) {
-        if (!links[i].hasAttribute(CHANGE_MARK)) {
-            return links[i].getAttribute('href');
-        }
-    }
-    return null;
+    const links = Array.from(document.querySelectorAll("link[rel*='icon']"))
+        .filter(link => !link.hasAttribute(CHANGE_MARK));
+    const preferred = links.find(isTabFaviconLink) || links[0];
+    return preferred ? preferred.getAttribute('href') : null;
 };
 
 /** Removes the link elements we own. Used when there is no original to restore. */

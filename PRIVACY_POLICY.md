@@ -33,4 +33,6 @@ The extension requests the minimum permissions needed to function:
 We may update this Privacy Policy from time to time. Any changes will be posted on this page.
 
 ## Contact
-If you have any questions about this Privacy Policy, please contact us via the Chrome Web Store support page.
+If you have any questions about this Privacy Policy, email **support@palworks.ai**, or use the
+Chrome Web Store support page. Security reports go to the same address; see
+[docs/SECURITY.md](docs/SECURITY.md).

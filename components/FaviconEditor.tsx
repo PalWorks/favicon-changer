@@ -55,6 +55,14 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     // while switching away and back keeps the user's edits.
     const [patternDraft, setPatternDraft] = useState('');
     const [patternDraftFor, setPatternDraftFor] = useState<MatchType | null>(null);
+    // Whether the draft above is the user's own text rather than one we
+    // suggested. A suggestion is re-derived when the target URL changes; the
+    // user's text never is. Without this the draft kept the suggestion built
+    // for whatever URL happened to be in the field when the scope was picked,
+    // which on the settings page is usually the empty string or the previous
+    // rule's address, so a prefix rule could silently be saved against the
+    // wrong site (ROADMAP R-42).
+    const [patternEdited, setPatternEdited] = useState(false);
     const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
     const [fileAccess, setFileAccess] = useState(true);
     const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -88,6 +96,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                 if (PATTERN_SCOPES.includes(target.scope)) {
                     setPatternDraft(target.matcher || suggestionFor(target.scope, target.url));
                     setPatternDraftFor(target.scope);
+                    setPatternEdited(!!target.matcher);
                 }
                 // Icon-opened window: collapsed like the bubble. Browse-handoff: open upload.
                 setOpenSection(target.section || null);
@@ -117,6 +126,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
         if (PATTERN_SCOPES.includes(scope) && patternDraftFor !== scope) {
             setPatternDraft(suggestionFor(scope, mode === 'popup' ? currentTab.url : manualUrl));
             setPatternDraftFor(scope);
+            setPatternEdited(false);
         }
     };
 
@@ -150,9 +160,12 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             if (PATTERN_SCOPES.includes(initialRule.matchType)) {
                 setPatternDraft(initialRule.matcher);
                 setPatternDraftFor(initialRule.matchType);
+                // A saved matcher is the user's, never a suggestion to overwrite.
+                setPatternEdited(true);
             } else {
                 setPatternDraft('');
                 setPatternDraftFor(null);
+                setPatternEdited(false);
             }
 
             // Auto-expand section based on sourceType or metadata
@@ -185,6 +198,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             setApplyScope('exact_url');
             setPatternDraft('');
             setPatternDraftFor(null);
+            setPatternEdited(false);
             setOpenSection(null);
             setCurrentTab({ url: '', domain: '', favIconUrl: '' });
         }
@@ -242,6 +256,18 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     // never disagree about which rule is being edited.
     const targetUrl = mode === 'popup' ? currentTab.url : manualUrl;
     const targetDomain = mode === 'popup' ? currentTab.domain : hostnameFromInput(manualUrl);
+
+    // Keep an un-edited suggestion in step with the address above. selectScope
+    // can only build a suggestion from the URL known at the moment the scope is
+    // clicked, and on the settings page the scope is normally picked first, so
+    // without this the field stays empty (or keeps the previous rule's text)
+    // however much the user then types. See R-42.
+    useEffect(() => {
+        if (!PATTERN_SCOPES.includes(applyScope) || patternEdited) return;
+        const suggestion = suggestionFor(applyScope, targetUrl);
+        setPatternDraft(prev => (prev === suggestion ? prev : suggestion));
+        setPatternDraftFor(applyScope);
+    }, [applyScope, targetUrl, patternEdited]);
 
     const currentMatcher =
         applyScope === 'domain' ? targetDomain
@@ -647,6 +673,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                                             onClick={() => {
                                                 setPatternDraft(suggestionFor(applyScope, targetUrl));
                                                 setPatternDraftFor(applyScope);
+                                                setPatternEdited(false);
                                             }}
                                             className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700"
                                         >
@@ -658,7 +685,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                                     id="fc-pattern"
                                     type="text"
                                     value={patternDraft}
-                                    onChange={(e) => { setPatternDraft(e.target.value); setPatternDraftFor(applyScope); }}
+                                    onChange={(e) => { setPatternDraft(e.target.value); setPatternDraftFor(applyScope); setPatternEdited(true); }}
                                     spellCheck={false}
                                     placeholder={applyScope === 'prefix' ? 'https://example.com/docs' : '^https://example\\.com/docs'}
                                     className={`w-full border rounded-md px-3 py-2 text-xs font-mono outline-none focus:ring-2 ${patternError ? 'border-red-300 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}

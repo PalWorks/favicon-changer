@@ -17,7 +17,7 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **165 tests across 7 files**, run time under a second.
+Current coverage: **190 tests across 8 files**, run time under a second.
 
 | File | Covers |
 |---|---|
@@ -28,7 +28,7 @@ Current coverage: **165 tests across 7 files**, run time under a second.
 | `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
 | `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
 | `storage.test.ts` | The v1 format migration, its latch, settings defaults, storage usage |
-| `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), the no-op write, stale-link removal, pages with no icon link, original-icon capture |
+| `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), which link is chosen when a page has several (R-45), the no-op write, stale-link removal, pages with no icon link, original-icon capture and its preference for the real favicon over an `apple-touch-icon` (R-44) |
 
 Table name: **test-files**
 
@@ -96,17 +96,63 @@ assert on `createdAt`, it is overwritten on every save.
 
 ---
 
-## The manual list really is manual
+## Driving the real extension
 
-Loading the extension cannot be automated on this machine. Chrome 152 accepts
-`--load-extension` and `--disable-extensions-except` on the command line and then **silently
-ignores them**: no extension target appears over the DevTools protocol, the service worker never
-starts, `onInstalled` never opens the options page, and nothing is logged. Verified headless, and
-headful under `xvfb`, with the flags confirmed present on the real process command line. So there
-is no way to drive a real extension build from a script here; `chrome://extensions` and
-**Load unpacked** is the only route.
+The command-line flags do not work and the DevTools protocol does. This was wrong in an earlier
+version of this file, and correcting it turned four bugs up in an afternoon, including one that
+broke the product's core promise on a large class of sites (R-42 to R-45).
 
-What *can* be automated, and is worth doing before the manual pass:
+**What does not work:** `--load-extension` and `--disable-extensions-except`. Chrome 152 accepts
+them on the command line and then silently ignores them: no extension target appears, the service
+worker never starts, `onInstalled` never fires, and nothing is logged. Verified headless, and
+headful under `xvfb`, with the flags confirmed present on the real process command line.
+
+**What does work:** the `Extensions.loadUnpacked` command on the browser-level DevTools session.
+Against a Chrome already running with `--remote-debugging-port`:
+
+```js
+// node, using the global WebSocket in Node 22+
+const { webSocketDebuggerUrl } = await (await fetch('http://127.0.0.1:9222/json/version')).json();
+const ws = new WebSocket(webSocketDebuggerUrl);
+ws.onopen = () => ws.send(JSON.stringify({
+  id: 1, method: 'Extensions.loadUnpacked', params: { path: '/absolute/path/to/dist' },
+}));
+// -> { id: 1, result: { id: '<the extension id>' } }
+```
+
+The extension is then fully live: `background.js` appears as a `service_worker` target,
+`onInstalled` fires and opens the options page, content scripts run in every tab. From there,
+`Target.attachToTarget` plus `Runtime.evaluate` drives any of it:
+
+- **The options and popup pages** are ordinary page targets. React inputs need the native value
+  setter (`Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set`) followed by
+  an `input` event; buttons take a plain `.click()`. The `aria-label`s added by R-30 are what make
+  controls findable, so the accessibility work pays for itself twice.
+- **Extension storage** is readable and writable from the service-worker target with
+  `chrome.storage.local`. Use it to set up preconditions, not to perform the step under test: a
+  rule written directly does not exercise `saveRule` or `notifyTabs`.
+- **`chrome.runtime.reload()`** in the service-worker target reloads the extension from disk after
+  a rebuild. It orphans the content script in every open tab and closes extension pages, so reload
+  the test tabs afterwards or the next result is a false negative.
+
+**Reading the result matters more than driving it.** Three signals, in increasing order of truth:
+
+| Signal | How | What it proves |
+|---|---|---|
+| The DOM | `Runtime.evaluate` on the page target, read `link[rel*=icon]` | The content script ran and wrote what it meant to |
+| The tab's favicon | the `faviconUrl` field in `http://127.0.0.1:9222/json/list` | Chrome's favicon driver accepted the change |
+| The tab strip | screenshot the browser window (`import -window <id>` on X11) and look | What the user actually sees |
+
+The DOM alone is not enough, and believing it is how R-45 survived: the DOM held our icon,
+`data-fc-modified` and all, while the tab strip still showed the site's own. Poll `faviconUrl`
+on a short interval to get a timeline rather than a single reading, since a background tab is not
+instantaneous.
+
+**Leave the profile as you found it.** Clear `chrome.storage.local`, close the tabs you opened,
+and remove the unpacked extension, particularly when the profile is someone's daily browser and
+already has the store build installed.
+
+What can be automated without loading the extension at all, and is worth doing first:
 
 - `npm run check` for logic and types.
 - `npm run dev` plus a browser driver for the React surfaces. The pages render with the
@@ -116,15 +162,16 @@ What *can* be automated, and is worth doing before the manual pass:
 - `node --check dist/*.js` to catch a broken bundle, and a grep of `dist/content.js` to confirm
   it is still a self-contained IIFE with no bare `import`.
 
-What cannot: everything that depends on the content script actually running in a page. That is
-the list below, and it is exactly the part where this codebase has historically broken.
+Items 1 to 6 below have all been run this way against a real Chrome. Items 7 to 11 still need
+hands: they involve the OS file dialog, drag and drop, or two extension surfaces open at once.
 
 ---
 
 ## What a change must be tested against manually
 
 `npm run build`, reload unpacked, then walk this list. These are the cases that have actually
-broken before, in the order they broke:
+broken before, in the order they broke. Items 1 to 6 can be driven over the DevTools protocol as
+described above; 7 to 11 cannot.
 
 1. **Active tab**, apply an emoji rule; the tab icon changes immediately.
 2. **Background tab**, apply a rule to a page in a *non-focused* tab; its icon must change

@@ -34,6 +34,17 @@ element rather than only its final `href`, because a replaced node produces a co
 `href` and still fails in a real browser. Rewriting it as remove-and-append fails 8 cases,
 verified by doing exactly that and watching them go red.
 
+**Amended 2026-09-06 (R-45): *which* link is half the decision.** Mutating in place is necessary
+and was not sufficient, because the code took the first element matching `link[rel*='icon']`. On
+a page whose head lists `<link rel="apple-touch-icon">` before its favicon, and that is a large
+share of the web, the first match is not the element Chrome paints the tab from. We mutated that
+one and deleted the real one, so Chrome was left tracking a node that no longer existed and the
+icon did not change until the page was reloaded. The link is now chosen as: one we already own,
+else the first whose `rel` contains `icon` and is not `apple-touch-icon`,
+`apple-touch-icon-precomposed`, `mask-icon` or `fluid-icon`, else the first icon-ish link, else a
+new one. The sibling sweep removes only competing tab favicons and leaves the rest in place.
+Reproduced live on en.wikipedia.org before the fix and after.
+
 ---
 
 ## ADR-002: Do nothing on pages we have not modified
@@ -281,3 +292,29 @@ recourse.
 **Consequence.** Four scope options in the editor rather than two, and `MATCH_TYPES` has to be
 validated on import (R-07) because an unknown type is now a realistic thing to receive from an
 older or newer export.
+---
+
+## ADR-014: Tell our favicon writes from the page's by value, not by an ownership mark
+**Status**: Accepted · 2026-09-06 · **Load-bearing**
+
+**Decision.** The content script's MutationObserver decides whether to re-apply by comparing the
+icon link's `href` to the URL the active rule wants. It does not consult `data-fc-modified`.
+
+**Why.** The mark cannot answer the question. ADR-001 requires us to repurpose the link Chrome
+already tracks, and we mark that element, so on any page that reasserts its own icon the page is
+rewriting the very element carrying our mark. Skipping marked elements therefore filtered out
+every page write as though it were ours, and only the 2 s backup poller ever noticed. Measured
+against a page rewriting its icon every 300 ms, the user's icon was on screen about 7% of the
+time. The href is the honest test: if it already points at our URL the write was ours, otherwise
+the page changed it.
+
+**If reversed.** The extension loses to every SPA that reasserts its favicon, which is most of the
+sites people install it for.
+
+**Also.** It makes a feedback loop impossible for free: our own re-apply produces a mutation whose
+`href` matches, which is ignored. The alternative, a suppression flag set around our own DOM
+write, has to reason about when the observer callback runs relative to the write and is easy to
+get subtly wrong.
+
+**Limit.** A page that reasserts its icon unconditionally and for ever will alternate with us; the
+100 ms debounce caps how often we write. See [LIMITATIONS.md](LIMITATIONS.md) L-33.
