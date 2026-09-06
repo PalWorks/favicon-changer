@@ -64,7 +64,11 @@ equal by hand.
 ## 3. The favicon write path: the load-bearing trick
 
 This is the least obvious code in the repo and the part most likely to be "fixed" into a
-regression. It lives in `updateFavicon()` in [content.ts](../content.ts).
+regression. It lives in `updateFavicon()` in [utils/faviconDom.ts](../utils/faviconDom.ts),
+which the content script is the only importer of. It was extracted from `content.ts` precisely so
+it could be unit tested: [utils/faviconDom.test.ts](../utils/faviconDom.test.ts) asserts on the
+**identity** of the mutated element, and 8 of its cases fail if the code is rewritten as
+remove-and-append.
 
 Chrome only repaints the tab-strip icon from a DOM change in two situations:
 
@@ -84,7 +88,8 @@ So `updateFavicon()` deliberately:
 5. removes the other icon links so the browser cannot pick a stale one.
 
 **Do not refactor this into a remove-and-append.** It is the reason background tabs update
-without a reload, and it is how sites like Gmail update their own unread-count favicon.
+without a reload, and it is how sites like Gmail update their own unread-count favicon. The test
+suite will stop you, which is the point of it.
 
 ### Holding the icon against the page
 
@@ -221,7 +226,7 @@ everywhere.
 index.tsx / App.tsx ........... popup + expanded-window bootstrap
 Options.tsx ................... options page bootstrap, storage.onChanged live sync
 background.ts ................. service worker: OS detection, action routing
-content.ts .................... the only DOM-mutating code
+content.ts .................... orchestration: rule lookup, observer, polling
 
 components/
   FaviconEditor.tsx ........... shared editor engine for popup and options (~520 lines)
@@ -235,6 +240,7 @@ components/
   shared/ErrorBoundary.tsx .... wraps both React roots
 
 utils/
+  faviconDom.ts ............... the ONLY DOM-mutating code. Imported by content.ts alone
   matcher.ts .................. findBestRule / findConflictingRule  (pure, unit-tested)
   storage.ts .................. all chrome.storage access, migration, import/export, hand-off
   messaging.ts ................ isRestrictedUrl, PING-then-inject, sendMessageToTab

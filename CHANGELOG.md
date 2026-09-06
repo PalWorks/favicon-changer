@@ -94,6 +94,13 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 - Em dashes removed from the three user-facing strings that contained them.
 
 ### Changed
+- **The scope selector moved above the URL field and onto a single row of four**, with short
+  button labels so it fits the popup. From review feedback.
+- **The favicon write path is now covered by tests.** It was extracted from the content script
+  into its own module so it could be tested under jsdom, and the tests assert on the identity of
+  the mutated element: rewriting it the "obvious" way, replacing the element instead of mutating
+  it, now fails the suite instead of silently breaking every background tab. That is the single
+  most fragile behaviour in the extension.
 - **Saving a rule no longer touches every open tab.** It pinged all of them and injected a content
   script into any that did not answer, so one save could reach a hundred tabs and wake discarded
   ones. Now discarded tabs are skipped, only the tab you are looking at is worth an injection, and

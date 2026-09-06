@@ -168,7 +168,8 @@ Things that must stay true. Breaking one of these is a bug even if tests pass.
 
 1. **An excluded domain is never touched.** No DOM read or write, no observer, no interval.
 2. **A page with no matching rule and no prior modification by us is never touched.**
-3. **Only `content.ts` mutates page DOM.** No other file may.
+3. **Only the content script context mutates page DOM.** In practice that means `content.ts` and
+   `utils/faviconDom.ts`, which it alone imports. No other file and no other context may.
 4. **The tracked `<link>` element is mutated in place, never replaced**, or background tabs stop
    updating. See [ARCHITECTURE.md](ARCHITECTURE.md) §3.
 5. **Our own DOM writes never trigger a re-apply**, they carry `data-fc-modified` and the

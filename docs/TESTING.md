@@ -8,7 +8,8 @@ Extension code splits cleanly into three testability tiers, and the strategy fol
 |---|---|---|---|
 | Pure logic | `matcher`, `validation`, `patterns`, `importRules`, `canvas` string helpers | Vitest in plain Node, fast, deterministic | covered |
 | Browser-API logic | `storage` (migration, usage), `messaging` (`isRestrictedUrl`) | Vitest with a stubbed `chrome` global | migration and URL gating covered; the messaging and logging paths are not |
-| Canvas + DOM behaviour | `utils/canvas.ts` drawing, `content.ts`, all components | Manual, unpacked, in a real browser | manual only |
+| DOM behaviour | `utils/faviconDom.ts` | Vitest under jsdom | covered, including the ADR-001 identity lock |
+| Canvas + component behaviour | `utils/canvas.ts` drawing, `content.ts` orchestration, all components | Manual, unpacked, in a real browser | manual only |
 
 Table name: **test-tiers**
 
@@ -27,8 +28,16 @@ Current coverage: **165 tests across 7 files**, run time under a second.
 | `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
 | `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
 | `storage.test.ts` | The v1 format migration, its latch, settings defaults, storage usage |
+| `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), the no-op write, stale-link removal, pages with no icon link, original-icon capture |
 
 Table name: **test-files**
+
+`faviconDom.test.ts` is the only DOM test, and it opts in per file with a
+`// @vitest-environment jsdom` docblock rather than switching the whole suite, which keeps the
+other seven files running in plain Node. It asserts on the **identity** of the mutated element,
+not just its final `href`: a replaced node ends up with the right `href` and still fails in a
+real browser, which is exactly the regression ADR-001 exists to prevent. Rewriting the function
+as remove-and-append turns 8 of its cases red, which was verified by doing it.
 
 The stubbing pattern for `storage.test.ts` is worth knowing: `chrome` must be stubbed **before**
 the module is imported, because `constants.ts` computes `IS_DEV` from the presence of
@@ -139,16 +148,14 @@ broken before, in the order they broke:
 
 ## Gaps worth closing, highest value first
 
-1. **A `jsdom` suite for `content.ts`'s `updateFavicon`.** Asserting that the *same element
-   instance* is mutated rather than replaced would lock ADR-001 into the test suite, which is
-   where it belongs: it is the one behaviour that breaks silently, only on background tabs, and
-   only in a real browser. This needs the `jsdom` devDependency, so it is a dependency decision
-   rather than just work (ROADMAP R-14).
-2. **The messaging paths**: `ensureContentScriptReady`'s ping-then-inject-then-retry, and
+1. **The messaging paths**: `ensureContentScriptReady`'s ping-then-inject-then-retry, and
    `notifyTabs`'s decision about which tabs to touch. Both need a `chrome.tabs` stub, which
    `storage.test.ts` already demonstrates.
-3. **`logger.ts` batching**: that concurrent writers do not lose entries, and that `pagehide`
+2. **`logger.ts` batching**: that concurrent writers do not lose entries, and that `pagehide`
    flushes. Needs fake timers.
+3. **`content.ts` orchestration**: the observer debounce, the self-stopping poller, and the
+   do-nothing-on-unmatched-pages guard (ADR-002). Now more approachable, since the DOM half is
+   already isolated and jsdom is available; needs `chrome` and `MutationObserver` stubs.
 4. **Canvas drawing** (`drawBadge`, `drawOverlay`, `compressFaviconDataUrl`): needs a canvas
    implementation, so it is the most expensive and the least likely to regress silently.
 

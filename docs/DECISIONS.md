@@ -27,6 +27,13 @@ foreground tab still updates.
 **Also.** The write is skipped when the `href` is already correct, which suppresses a visible
 icon flash on redundant re-applies.
 
+**Locked in by tests since 2026-09-06.** The function was extracted to
+[utils/faviconDom.ts](../utils/faviconDom.ts) (imported by the content script and nothing else)
+so it could be unit tested under jsdom. The tests assert on the **identity** of the mutated
+element rather than only its final `href`, because a replaced node produces a correct-looking
+`href` and still fails in a real browser. Rewriting it as remove-and-append fails 8 cases,
+verified by doing exactly that and watching them go red.
+
 ---
 
 ## ADR-002: Do nothing on pages we have not modified

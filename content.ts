@@ -4,64 +4,25 @@ import { FaviconRule, GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
 import { OBSERVER_DEBOUNCE_MS, MAX_STABLE_CHECKS } from './constants';
-
-// Change Mark Attribute to prevent observer loops
-const CHANGE_MARK = 'data-fc-modified';
+import {
+  CHANGE_MARK,
+  updateFavicon,
+  readOriginalFaviconHref,
+  removeMarkedFaviconLinks,
+  hasFaviconHref,
+} from './utils/faviconDom';
 
 // Tracks whether WE have actually mutated this page's favicon. Used so we never
 // touch the DOM on pages where no rule applies (which previously disrupted some
 // SPAs, e.g. GA4's header component, by churning <head> needlessly).
 let hasModified = false;
 
-// Function to find and replace/update the favicon.
-//
-// IMPORTANT — why we mutate an EXISTING link's href instead of recreating nodes:
-// Chrome only re-paints a tab-strip favicon from a DOM change in two situations:
-//   (a) the tab is the active/foreground tab, OR
-//   (b) the `href` of a <link> element Chrome is ALREADY TRACKING is mutated.
-// Adding a brand-new <link> (or remove-then-append) is NOT picked up for
-// background/inactive tabs — Chrome keeps showing the load-time favicon until
-// the tab is reloaded. This was verified empirically: an href mutation repaints
-// a background tab, a fresh-node insert does not. (It's also how sites like
-// Gmail update their unread-count favicon while in the background.)
-// So we always repurpose the existing tracked icon link in place; only when a
-// page has no icon link at all do we create one.
-function updateFavicon(url: string) {
-  const head = document.getElementsByTagName('head')[0];
-  if (!head) return;
-
-  // Use Array.from to avoid selector injection with special characters in URL.
-  const iconLinks = Array.from(document.querySelectorAll("link[rel*='icon']")) as HTMLLinkElement[];
-
-  // Reuse the element Chrome is already tracking — prefer one we own, else the
-  // page's own first icon link (the one Chrome started tracking at load).
-  let ourLink = iconLinks.find(link => link.hasAttribute(CHANGE_MARK)) || iconLinks[0];
-
-  if (ourLink) {
-    // Mutating href on the tracked element is what triggers the repaint
-    // (including on background tabs). Skip the write if it's already correct so
-    // re-applies of an unchanged icon don't cause a needless tab-icon flash.
-    if (ourLink.getAttribute('href') !== url) ourLink.setAttribute('href', url);
-    if (ourLink.getAttribute('rel') !== 'icon') ourLink.setAttribute('rel', 'icon');
-    if (!ourLink.hasAttribute(CHANGE_MARK)) ourLink.setAttribute(CHANGE_MARK, 'true');
-  } else {
-    // No icon link exists on the page — create one. (Active tabs repaint
-    // immediately; a background tab with no prior favicon may not repaint until
-    // it is next activated, which is an acceptable edge case.)
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.href = url;
-    link.setAttribute(CHANGE_MARK, 'true');
-    head.appendChild(link);
-    ourLink = link;
-    logger.debug('[Content] Appended new favicon link');
-  }
-  hasModified = true;
-
-  // Remove any remaining icon links so the browser can't pick a stale one.
-  iconLinks.forEach(link => {
-    if (link !== ourLink) link.remove();
-  });
+// Applies our icon and records that we have now touched this page. The DOM work
+// itself lives in utils/faviconDom.ts, where it is unit tested; read the note on
+// updateFavicon() there before changing how it writes, because mutating the
+// tracked link in place is the only thing that repaints a background tab.
+function applyFavicon(url: string) {
+  if (updateFavicon(url)) hasModified = true;
 }
 
 // --- MATCHING ENGINE ---
@@ -113,7 +74,7 @@ function setupObserver(targetUrl: string) {
       clearTimeout(observerDebounceTimer);
       observerDebounceTimer = setTimeout(() => {
         logger.debug('[Content] Detected external change, re-applying (debounced)...');
-        updateFavicon(targetUrl);
+        applyFavicon(targetUrl);
         // Re-arm the backup poller in case it had stopped after being stable.
         if (!intervalId) startVerificationInterval(targetUrl);
       }, OBSERVER_DEBOUNCE_MS);
@@ -134,13 +95,9 @@ function startVerificationInterval(targetUrl: string) {
   if (intervalId) clearInterval(intervalId);
   let stableChecks = 0;
   intervalId = setInterval(() => {
-    // Safer check avoiding selector injection
-    const currentLink = Array.from(document.querySelectorAll("link[rel*='icon']"))
-      .find(link => link.getAttribute('href') === targetUrl);
-
-    if (!currentLink) {
+    if (!hasFaviconHref(targetUrl)) {
       logger.debug('[Content] Interval check failed, re-applying...');
-      updateFavicon(targetUrl);
+      applyFavicon(targetUrl);
       stableChecks = 0;
     } else if (++stableChecks >= MAX_STABLE_CHECKS) {
       clearInterval(intervalId);
@@ -154,26 +111,20 @@ let originalFaviconUrl: string | null = null;
 function captureOriginalFavicon() {
   if (originalFaviconUrl) return; // Already captured
 
-  const links = document.querySelectorAll("link[rel*='icon']");
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i];
-    if (!link.hasAttribute(CHANGE_MARK)) {
-      originalFaviconUrl = link.getAttribute('href');
-      logger.debug('[Content] Captured original favicon:', originalFaviconUrl);
-      return;
-    }
+  originalFaviconUrl = readOriginalFaviconHref();
+  if (originalFaviconUrl) {
+    logger.debug('[Content] Captured original favicon:', originalFaviconUrl);
   }
 }
 
 function restoreOriginalFavicon() {
   if (originalFaviconUrl) {
     logger.info('[Content] Restoring original favicon:', originalFaviconUrl);
-    updateFavicon(originalFaviconUrl);
+    applyFavicon(originalFaviconUrl);
   } else {
     // If no original was found, maybe just remove our custom ones?
     // For now, let's try to remove our marked links
-    const markedLinks = document.querySelectorAll(`link[${CHANGE_MARK}='true']`);
-    markedLinks.forEach(link => link.remove());
+    removeMarkedFaviconLinks();
     logger.info('[Content] No original favicon to restore, removed custom links.');
   }
   // We are back to the original state; further no-rule re-applies are no-ops.
@@ -209,7 +160,7 @@ function applyRule() {
 
     if (rule) {
       logger.info(`[Content] Applied rule: ${rule.matchType} match for ${rule.matcher}`);
-      updateFavicon(rule.faviconUrl);
+      applyFavicon(rule.faviconUrl);
       setupObserver(rule.faviconUrl);
     } else if (settings.defaultFaviconUrl) {
       // Deliberately applies to EVERY page with no matching rule, whether or
@@ -218,7 +169,7 @@ function applyRule() {
       // <link> tag at all), which the privacy position rules out. The settings
       // copy says so plainly rather than promising otherwise. ROADMAP R-25.
       logger.info(`[Content] Applied Global Default`);
-      updateFavicon(settings.defaultFaviconUrl);
+      applyFavicon(settings.defaultFaviconUrl);
       setupObserver(settings.defaultFaviconUrl);
     } else {
       // No rule matches. Only restore if WE previously changed this page.

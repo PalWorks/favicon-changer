@@ -51,6 +51,8 @@ changes.
 | R-37 | Undecodable icon showed a broken glyph | S | `FaviconPreview` checks the element, not just the events (L-31) |
 | R-38 | Dev server bound to `0.0.0.0` | S | Localhost only; `npm run dev -- --host` is the opt-in (L-32) |
 | R-09 | `notifyTabs` fan-out | M | Skips discarded tabs, and only injects into the active tab. The rest are pinged and pick up rules on next load |
+| R-14 | Close the test gaps | M | 183 tests across 8 files, up from 20 in one. Includes the jsdom identity lock on ADR-001 |
+| R-41 | Scope selector layout | S | Moved above the URL field and onto one row of four, from review feedback |
 
 Table name: **roadmap-done**
 
@@ -58,7 +60,6 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-14 | Close the test gaps | M | **mostly done** | 165 tests now. What is left needs the `jsdom` devDependency, so it is a decision, not just work |
 | R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
 | R-32 | Rules list search and sort | M | **pending** | Pause is done (R-33); search, sort and bulk delete are not |
 | R-39 | Store screenshots | S | **pending** | Blocks a listing update, and needs real UI captures rather than generated images |
@@ -370,7 +371,7 @@ type error.
 an outside contributor. If that becomes relevant, add a single-job workflow limited to PRs
 against `main`. See ADR-012.
 
-### R-14 · Close the test gaps · **M** · mostly done 2026-09-02
+### R-14 · Close the test gaps · **M** · ✅ done 2026-09-06
 In value order: `utils/validation.ts`; the storage migration latch; `normalizeImageDataUrl`;
 `isRestrictedUrl`; then a jsdom test asserting `updateFavicon` mutates the **same element
 instance**, which would lock ADR-001 into the suite where it belongs. See
@@ -381,10 +382,15 @@ instance**, which would lock ADR-001 into the suite where it belongs. See
 `messaging.test.ts` (`isRestrictedUrl`), and `storage.test.ts` covering the v1 migration, its
 latch, settings defaults and storage usage.
 
-**Still open, and it is the most valuable one**: the jsdom lock on ADR-001. It needs the `jsdom`
-devDependency, which is a decision to take rather than work to do. The other remaining gaps
-(messaging paths, logger batching, canvas drawing) are listed in
-[docs/TESTING.md](docs/TESTING.md).
+**Completed 2026-09-06 with the jsdom lock on ADR-001.** `jsdom` added as a devDependency and
+the favicon write path extracted from `content.ts` into `utils/faviconDom.ts` so it could be
+tested at all; the content script remains its only importer, and keeps the orchestration.
+
+The test asserts on the **identity** of the mutated element rather than its final `href`, because
+a replaced node ends up with the right `href` and still fails in a real browser. Proven by
+rewriting the function as remove-and-append and confirming 8 cases go red, then restoring it.
+183 tests across 8 files. Remaining gaps (messaging paths, logger batching, `content.ts`
+orchestration, canvas drawing) are listed in [docs/TESTING.md](docs/TESTING.md).
 
 ### R-18 · Delete verified dead code · **S** · ✅ done 2026-09-02
 The full verified inventory is table **verified-dead-code** in
@@ -461,6 +467,17 @@ The audit gate added by R-16 is local and only runs on push, so a new advisory i
 someone next pushes. Dependabot would report it on a schedule. Weigh against the constraint of
 keeping GitHub automation minimal (ADR-012): Dependabot is a config file rather than an Actions
 workflow, so it does not consume Actions minutes, but it does open pull requests.
+
+---
+
+### R-41 · Scope selector placement and layout · **S** · ✅ done 2026-09-06
+From review feedback on the running extension. The selector now sits directly under the TARGET
+PAGE header and above the URL field, since it decides how that text is read; in the popup, where
+the target is the current tab, it follows the site line rather than splitting it from its
+heading. One row of four instead of a 2x2 grid, with short button labels (Domain, This Page,
+Starts With, Regex) so four fit the 400px popup: 79px each there, 118px on the options page, no
+clipping. Full names kept for prose, tooltips and `aria-label`. Also removed the helper line
+under the pattern field, which repeated the scope hint sitting just above it.
 
 ---
 

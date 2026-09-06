@@ -124,6 +124,10 @@ Invisible without React types, which is exactly why L-29 matters.
 
 ## 4. Runtime and robustness
 
+*The favicon write path (ADR-001), historically the most fragile thing here, is now covered by
+`utils/faviconDom.test.ts` under jsdom. It asserts element identity, so a remove-and-append
+rewrite fails the suite rather than shipping.*
+
 ### L-31 · An undecodable icon showed a broken-image glyph, not the fallback · *resolved 2026-09-02*
 A `data:` URL that is well-formed but not a decodable image (which an imported rule can carry,
 since decodability cannot be checked at import time) leaves a 0x0 image and fires **load**, not
