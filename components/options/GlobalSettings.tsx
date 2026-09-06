@@ -69,7 +69,7 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
             </h2>
             <div className="space-y-6">
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Fallback Favicon</label>
+                    <label htmlFor="fc-fallback-url" className="block text-sm font-medium text-slate-700 mb-2">Fallback Favicon</label>
                     {/* The old copy said "if a site has no favicon", which is not what
                         the code does and read as the extension going rogue across the
                         whole web. Detecting whether a site really has an icon is not
@@ -82,6 +82,7 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                     </p>
                     <div className="flex gap-2">
                         <input
+                            id="fc-fallback-url"
                             type="text"
                             placeholder="Image URL..."
                             value={fallbackDraft}
@@ -104,12 +105,13 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                 </div>
 
                 <div className="pt-4 border-t border-slate-100">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Excluded Sites</label>
+                    <label htmlFor="fc-exclude-domain" className="block text-sm font-medium text-slate-700 mb-2">Excluded Sites</label>
                     <p className="text-xs text-slate-500 mb-3">
                         The extension will never touch these domains: no favicon changes, no DOM mutations.
                     </p>
                     <div className="flex gap-2 mb-3">
                         <input
+                            id="fc-exclude-domain"
                             type="text"
                             placeholder="e.g. analytics.google.com"
                             value={newExcludedDomain}
@@ -142,7 +144,7 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                 <StorageMeter />
 
                 <div className="pt-4 border-t border-slate-100 flex gap-2">
-                    <input type="file" ref={importInputRef} className="hidden" accept=".json" onChange={handleImport} />
+                    <input type="file" ref={importInputRef} className="hidden" accept=".json" aria-label="Choose a rules JSON file to import" onChange={handleImport} />
                     <Button size="sm" variant="secondary" onClick={() => importInputRef.current?.click()}>
                         📥 Import JSON
                     </Button>

@@ -172,12 +172,14 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                             <div className="flex gap-2">
                                 <input
                                     type="color"
+                                    aria-label="Overlay colour"
                                     value={overlayColor}
                                     onChange={(e) => setOverlayColor(e.target.value)}
                                     className="h-8 w-12 p-0 border-0 rounded cursor-pointer"
                                 />
                                 <input
                                     type="text"
+                                    aria-label="Overlay colour hex value"
                                     value={overlayColor}
                                     onChange={(e) => setOverlayColor(e.target.value)}
                                     className="flex-1 border border-slate-200 rounded px-2 text-xs font-mono"
@@ -188,6 +190,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Opacity: {Math.round(overlayOpacity * 100)}%</label>
                             <input
                                 type="range"
+                                aria-label="Overlay opacity"
                                 min="0"
                                 max="1"
                                 step="0.1"
@@ -203,6 +206,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Badge Text (Max 3)</label>
                             <input
                                 type="text"
+                                aria-label="Badge text, up to 3 characters"
                                 maxLength={3}
                                 value={badgeText}
                                 onChange={(e) => setBadgeText(e.target.value)}
@@ -214,14 +218,14 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Background</label>
                                 <div className="flex items-center gap-1">
-                                    <input type="color" value={badgeBgColor} onChange={(e) => setBadgeBgColor(e.target.value)} className="h-6 w-6 p-0 border-0 rounded cursor-pointer" />
+                                    <input type="color" aria-label="Badge background colour" value={badgeBgColor} onChange={(e) => setBadgeBgColor(e.target.value)} className="h-6 w-6 p-0 border-0 rounded cursor-pointer" />
                                     <span className="text-xs text-slate-500 font-mono">{badgeBgColor}</span>
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Text Color</label>
                                 <div className="flex items-center gap-1">
-                                    <input type="color" value={badgeTextColor} onChange={(e) => setBadgeTextColor(e.target.value)} className="h-6 w-6 p-0 border-0 rounded cursor-pointer" />
+                                    <input type="color" aria-label="Badge text colour" value={badgeTextColor} onChange={(e) => setBadgeTextColor(e.target.value)} className="h-6 w-6 p-0 border-0 rounded cursor-pointer" />
                                     <span className="text-xs text-slate-500 font-mono">{badgeTextColor}</span>
                                 </div>
                             </div>

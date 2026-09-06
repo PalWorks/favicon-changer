@@ -60,6 +60,7 @@ export const DebugLogs: React.FC = () => {
                         <label className="relative inline-flex items-center cursor-pointer">
                             <input
                                 type="checkbox"
+                                aria-label="Enable verbose logging"
                                 className="sr-only peer"
                                 checked={loggingEnabled}
                                 onChange={(e) => handleToggleLogging(e.target.checked)}
@@ -72,7 +73,7 @@ export const DebugLogs: React.FC = () => {
                         If you encounter issues, please download these logs and send them to support.
                     </p>
 
-                    <div className="bg-slate-900 rounded-lg p-3 h-48 overflow-y-auto font-mono text-[10px] text-green-400 leading-relaxed relative">
+                    <div role="log" aria-label="Debug log output" className="bg-slate-900 rounded-lg p-3 h-48 overflow-y-auto font-mono text-[10px] text-green-400 leading-relaxed relative">
                         {!loggingEnabled && logs.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-slate-500 bg-slate-900/50 backdrop-blur-sm">
                                 <p>Logging is disabled.</p>

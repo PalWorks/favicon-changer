@@ -54,6 +54,8 @@ changes.
 | R-14 | Close the test gaps | M | 183 tests across 8 files, up from 20 in one. Includes the jsdom identity lock on ADR-001 |
 | R-41 | Scope selector layout | S | Moved above the URL field and onto one row of four, from review feedback |
 | R-32 | Rules list search and sort | M | Search, type filter with counts, three sort orders, and multi-select with a batched bulk delete |
+| R-21 | Emoji rendered at 64px | S | Now 128px like every other source, with headroom for tall glyphs |
+| R-30 | Accessibility pass | S | Every control has an accessible name (30 of 30 audited), status messages are announced, switches expose state |
 
 Table name: **roadmap-done**
 
@@ -75,8 +77,6 @@ browser pass in [docs/TESTING.md](docs/TESTING.md), which cannot be automated (A
 
 | ID | Item | Tier | Effort | Note |
 |---|---|---|---|---|
-| R-30 | Accessibility pass | 4 | S | Icon-only buttons lack `aria-label`; the logging switch lacks a label |
-| R-21 | Emoji rendered at 64px | 4 | S | Everything else is 128px |
 | R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
 | R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
@@ -494,11 +494,25 @@ rule plus a switch in the list. Also the cheapest possible support tool.
 ### R-32 · Make the rules list scale · **M** · ✅ done 2026-09-06
 Search, sort by matcher or date, filter by match type, bulk delete (L-11).
 
-### R-30 · Accessibility pass · **S**
+### R-30 · Accessibility pass · **S** · ✅ done 2026-09-06
 Icon-only buttons carry `title` but no `aria-label`; the verbose-logging switch has no label
 association. Keyboard traversal of the emoji grid is untested.
 
-### R-21 · Render emoji at 128px · **S**
+**Outcome.** Audited in the browser rather than by eye: every `input`, `select` and `button` on
+the settings page, with all sections expanded, checked for an accessible name from `aria-label`,
+an associated `<label>`, text content or `title`. Started at five unnamed controls plus two file
+inputs, now 30 of 30 named and none unreachable by keyboard.
+
+Specifically: visible labels associated with their fields via `htmlFor`/`id` rather than sitting
+next to them; `aria-label` on the emoji search, emoji buttons, category jumps, colour pickers,
+the opacity slider, badge text and both file inputs; `aria-label` on the icon-only header
+buttons; and the verbose-logging switch, which had no name at all.
+
+Status messages are now `role="status"` with `aria-live` (assertive for errors, polite for
+confirmations), so a save result is announced rather than only drawn. The conflict banner is a
+polite live region, and the debug log pane is `role="log"`.
+
+### R-21 · Render emoji at 128px · **S** · ✅ done 2026-09-06
 Emoji use a 64×64 canvas at 54px serif while every other source is 128×128, inconsistent
 sharpness on high-DPI, and tall glyphs can clip.
 

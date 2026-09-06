@@ -26,14 +26,21 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
     const saveEmoji = async (emoji: string) => {
         setSelectedEmoji(emoji);
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
+        // 128px to match every other icon source. This was 64px, which was
+        // visibly softer than an uploaded icon on a high-DPI display, and left
+        // no headroom for tall glyphs.
+        const SIZE = 128;
+        canvas.width = SIZE;
+        canvas.height = SIZE;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-            ctx.font = '54px serif';
+            // 84% of the canvas, leaving room for glyphs that overshoot their
+            // em box (hearts and flags are the usual offenders).
+            ctx.font = `${Math.round(SIZE * 0.84)}px serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, 32, 34);
+            // Nudged down slightly: 'middle' sits emoji a touch high in practice.
+            ctx.fillText(emoji, SIZE / 2, SIZE / 2 + SIZE * 0.03);
             const dataUrl = canvas.toDataURL('image/png');
             try {
                 await onSave(dataUrl, 'emoji', { emojiChar: emoji });
@@ -78,13 +85,13 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
         <Accordion title="Select Emoji" icon="😀" isOpen={isOpen} onToggle={onToggle}>
             <div className="flex flex-col h-[300px]">
                 <div className="mb-2 relative">
-                    <input type="text" placeholder="Search emojis..." value={emojiSearch} onChange={(e) => setEmojiSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500" />
+                    <input type="text" aria-label="Search emojis" placeholder="Search emojis..." value={emojiSearch} onChange={(e) => setEmojiSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500" />
                     <span className="absolute left-3 top-2.5 text-slate-400">🔍</span>
                 </div>
                 {!emojiSearch && (
                     <div className="flex items-center gap-1 mb-2 overflow-x-auto no-scrollbar border-b border-slate-100 pb-1">
                         {EMOJI_LIBRARY.map(cat => (
-                            <button key={cat.id} onClick={() => scrollToCategory(cat.id)} className={`flex-1 py-1.5 px-3 text-lg rounded-lg transition-all text-center flex items-center justify-center shrink-0 ${activeCategory === cat.id ? 'bg-indigo-600 text-white shadow-md scale-105' : 'hover:bg-slate-100 text-slate-500 grayscale opacity-70 hover:grayscale-0 hover:opacity-100'}`} title={cat.name}>{cat.icon}</button>
+                            <button key={cat.id} onClick={() => scrollToCategory(cat.id)} aria-label={`Jump to ${cat.name}`} className={`flex-1 py-1.5 px-3 text-lg rounded-lg transition-all text-center flex items-center justify-center shrink-0 ${activeCategory === cat.id ? 'bg-indigo-600 text-white shadow-md scale-105' : 'hover:bg-slate-100 text-slate-500 grayscale opacity-70 hover:grayscale-0 hover:opacity-100'}`} title={cat.name}>{cat.icon}</button>
                         ))}
                     </div>
                 )}
@@ -92,7 +99,7 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
                     {filteredEmojis ? (
                         <div className="grid grid-cols-6 gap-2">
                             {filteredEmojis.map((emoji, idx) => (
-                                <button key={`${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
+                                <button key={`${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} aria-label={`Use ${emoji.keywords.split(' ')[0]} emoji`} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
                             ))}
                         </div>
                     ) : (
@@ -102,7 +109,7 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
                                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">{category.name}</h4>
                                     <div className="grid grid-cols-6 gap-2">
                                         {category.emojis.map((emoji, idx) => (
-                                            <button key={`${category.id}-${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
+                                            <button key={`${category.id}-${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} aria-label={`Use ${emoji.keywords.split(' ')[0]} emoji`} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
                                         ))}
                                     </div>
                                 </div>

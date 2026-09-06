@@ -498,12 +498,12 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                     </div>
 
                     <div className="flex gap-1">
-                        <input type="file" ref={importInputRef} className="hidden" accept=".json" onChange={handleImport} />
+                        <input type="file" ref={importInputRef} className="hidden" accept=".json" aria-label="Choose a rules JSON file to import" onChange={handleImport} />
 
                         <button
                             onClick={() => importInputRef.current?.click()}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
-                            title="Import Rules"
+                            title="Import Rules" aria-label="Import rules from a JSON file"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -512,7 +512,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                         <button
                             onClick={exportRulesAsJson}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
-                            title="Export Rules"
+                            title="Export Rules" aria-label="Export rules to a JSON file"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </button>
@@ -520,7 +520,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                         <button
                             onClick={openOptionsPage}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
-                            title="Open Dashboard & Settings"
+                            title="Open Dashboard & Settings" aria-label="Open settings"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         </button>
@@ -531,8 +531,15 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
             <main className="flex-1 p-4 overflow-y-auto relative">
                 <div className="space-y-5">
                     {/* Status Message - Sticky */}
+                    {/* Announced as well as shown: a save result that only exists
+                        visually is invisible to a screen reader. Assertive for
+                        errors, polite for confirmations. */}
                     {statusMessage && (
-                        <div className={`sticky top-0 z-20 p-3 rounded-lg text-xs font-medium flex items-center gap-2 shadow-md mb-2 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                        <div
+                            role="status"
+                            aria-live={statusMessage.type === 'error' ? 'assertive' : 'polite'}
+                            className={`sticky top-0 z-20 p-3 rounded-lg text-xs font-medium flex items-center gap-2 shadow-md mb-2 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                        >
                             <span>{statusMessage.type === 'success' ? '✅' : '⚠️'}</span>
                             {statusMessage.text}
                         </div>
@@ -540,7 +547,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
 
                     {/* Conflict Warning */}
                     {conflictRule && (
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2 flex flex-col gap-2">
+                        <div role="status" aria-live="polite" className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2 flex flex-col gap-2">
                             <div className="flex items-start gap-2">
                                 <span className="text-lg">⚠️</span>
                                 <div>
@@ -592,8 +599,9 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                         {/* URL Input / Display */}
                         {mode === 'options' ? (
                             <div className="mb-4">
-                                <label className="block text-xs font-medium text-slate-500 mb-1">Enter URL or Domain to Configure</label>
+                                <label htmlFor="fc-target-url" className="block text-xs font-medium text-slate-500 mb-1">Enter URL or Domain to Configure</label>
                                 <input
+                                    id="fc-target-url"
                                     type="text"
                                     value={manualUrl}
                                     onChange={(e) => setManualUrl(e.target.value)}
@@ -614,7 +622,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                                 <button
                                     onClick={handleDownloadOriginal}
                                     disabled={!currentTab.favIconUrl}
-                                    title="Export Original Favicon"
+                                    title="Export Original Favicon" aria-label="Download this site's original favicon"
                                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                 >
                                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

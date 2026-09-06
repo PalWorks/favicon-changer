@@ -14,6 +14,12 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 - **The rules list is searchable, filterable and sortable**, with filter chips per match type
   showing how many rules each has, and sorting by newest, oldest or alphabetically. The heading
   reads "4 of 14" while a filter is active, so a narrowed list cannot be mistaken for all of them.
+- **Emoji icons render at 128px**, matching every other icon source. They were 64px, which was
+  visibly softer on a high-DPI display and left no headroom for taller glyphs.
+- **Accessibility**: every control on the settings page now has an accessible name, save results
+  and errors are announced to screen readers rather than only drawn, and the pause switches
+  expose their on/off state. Audited programmatically with all sections expanded: 30 of 30
+  controls named, none unreachable by keyboard.
 - **Bulk delete.** Tick several rules, or "select all shown", and remove them in one action. It is
   a single storage write and a single notification to open tabs, rather than one of each per rule.
 

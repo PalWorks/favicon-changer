@@ -263,7 +263,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                             <div className="w-16 justify-center bg-white border border-slate-200 text-indigo-600 text-xs font-bold rounded shadow-sm group-hover:border-indigo-200 h-7 flex items-center">
                                 {onRequestExpand ? 'Open' : 'Browse'}
                             </div>
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={handleFileSelect} />
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" aria-label="Choose an image file for the favicon" onChange={handleFileSelect} />
                         </div>
                         {onRequestExpand && (
                             <p className="text-[10px] text-slate-400 px-1 -mt-1 leading-tight">
@@ -278,6 +278,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                             </div>
                             <input
                                 type="text"
+                                aria-label="Image URL"
                                 placeholder="Or paste image URL..."
                                 value={customUrl}
                                 onChange={(e) => setCustomUrl(e.target.value)}
