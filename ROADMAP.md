@@ -20,7 +20,9 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 **pending** agreed but not started · **standing** a decision already taken, no action unless it
 changes.
 
-### Done (2026-09-02)
+### Done
+
+Dated 2026-09-02 unless the row says otherwise.
 
 | ID | Item | Effort | Outcome |
 |---|---|---|---|
@@ -51,11 +53,11 @@ changes.
 | R-37 | Undecodable icon showed a broken glyph | S | `FaviconPreview` checks the element, not just the events (L-31) |
 | R-38 | Dev server bound to `0.0.0.0` | S | Localhost only; `npm run dev -- --host` is the opt-in (L-32) |
 | R-09 | `notifyTabs` fan-out | M | Skips discarded tabs, and only injects into the active tab. The rest are pinged and pick up rules on next load |
-| R-14 | Close the test gaps | M | 183 tests across 8 files, up from 20 in one. Includes the jsdom identity lock on ADR-001 |
-| R-41 | Scope selector layout | S | Moved above the URL field and onto one row of four, from review feedback |
-| R-32 | Rules list search and sort | M | Search, type filter with counts, three sort orders, and multi-select with a batched bulk delete |
-| R-21 | Emoji rendered at 64px | S | Now 128px like every other source, with headroom for tall glyphs |
-| R-30 | Accessibility pass | S | Every control has an accessible name (30 of 30 audited), status messages are announced, switches expose state |
+| R-14 | Close the test gaps | M | (2026-09-06) 183 tests across 8 files, up from 20 in one. Includes the jsdom identity lock on ADR-001 |
+| R-41 | Scope selector layout | S | (2026-09-06) Moved above the URL field and onto one row of four, from review feedback |
+| R-32 | Rules list search and sort | M | (2026-09-06) Search, type filter with counts, three sort orders, and multi-select with a batched bulk delete |
+| R-21 | Emoji rendered at 64px | S | (2026-09-06) Now 128px like every other source, with headroom for tall glyphs |
+| R-30 | Accessibility pass | S | (2026-09-06) Every control has an accessible name (30 of 30 audited), status messages are announced, switches expose state |
 
 Table name: **roadmap-done**
 
