@@ -53,6 +53,7 @@ changes.
 | R-09 | `notifyTabs` fan-out | M | Skips discarded tabs, and only injects into the active tab. The rest are pinged and pick up rules on next load |
 | R-14 | Close the test gaps | M | 183 tests across 8 files, up from 20 in one. Includes the jsdom identity lock on ADR-001 |
 | R-41 | Scope selector layout | S | Moved above the URL field and onto one row of four, from review feedback |
+| R-32 | Rules list search and sort | M | Search, type filter with counts, three sort orders, and multi-select with a batched bulk delete |
 
 Table name: **roadmap-done**
 
@@ -61,7 +62,6 @@ Table name: **roadmap-done**
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
 | R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
-| R-32 | Rules list search and sort | M | **pending** | Pause is done (R-33); search, sort and bulk delete are not |
 | R-39 | Store screenshots | S | **pending** | Blocks a listing update, and needs real UI captures rather than generated images |
 
 Table name: **roadmap-next**
@@ -491,7 +491,7 @@ Show used/available in settings, with a warning band, so "Storage full" is never
 Today the only way to test whether a rule is the culprit is to delete it (L-11). A boolean on the
 rule plus a switch in the list. Also the cheapest possible support tool.
 
-### R-32 · Make the rules list scale · **M**
+### R-32 · Make the rules list scale · **M** · ✅ done 2026-09-06
 Search, sort by matcher or date, filter by match type, bulk delete (L-11).
 
 ### R-30 · Accessibility pass · **S**

@@ -75,10 +75,11 @@ The preview effect returns early when `sourceIconUrl` is empty, so `previewUrl` 
 "last modified". Harmless today, but it destroys the only ordering signal, which L-04's fix may
 want to use.
 
-### L-11 · The rules list does not scale → **R-32** · *partly resolved 2026-09-02, R-33 done*
-Per-rule pause is **done**: a rule can be switched off without losing its icon, so ruling one out
-as the cause of something no longer means deleting it. Still missing: search, sort, filter and
-bulk delete. Past roughly 30 rules the list is unmanageable.
+### L-11 · The rules list did not scale · *resolved, R-33 on 2026-09-02 and R-32 on 2026-09-06*
+**Fixed** in two parts. Per-rule pause (R-33) means a rule can be switched off without losing its
+icon, so ruling one out as the cause of something no longer means deleting it. Search, per-type
+filter chips with counts, three sort orders and multi-select bulk delete (R-32) mean the list
+stays usable well past the couple of dozen rules where it used to become unmanageable.
 
 ### L-12 · No storage-usage visibility · *resolved 2026-09-02, R-27 done*
 **Fixed.** The settings page shows a meter of bytes used against the quota, with a warning band

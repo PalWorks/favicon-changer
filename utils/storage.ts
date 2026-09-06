@@ -95,6 +95,23 @@ export const saveRule = async (rule: FaviconRule): Promise<void> => {
   notifyTabs();
 };
 
+/**
+ * Deletes several rules in one write.
+ *
+ * Calling deleteRule in a loop would read, write and broadcast to every open tab
+ * once per rule, so removing twenty rules meant twenty full fan-outs.
+ */
+export const deleteRules = async (ids: string[]): Promise<void> => {
+  if (!ids.length) return;
+
+  const { rules, settings } = await getStorageData();
+  const remaining = { ...rules };
+  ids.forEach(id => { delete remaining[id]; });
+
+  await persistData({ rules: remaining, settings });
+  notifyTabs();
+};
+
 export const deleteRule = async (id: string): Promise<void> => {
   const { rules, settings } = await getStorageData();
   const { [id]: _, ...remainingRules } = rules;

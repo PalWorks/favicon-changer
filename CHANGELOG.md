@@ -10,7 +10,12 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- **The rules list is searchable, filterable and sortable**, with filter chips per match type
+  showing how many rules each has, and sorting by newest, oldest or alphabetically. The heading
+  reads "4 of 14" while a filter is active, so a narrowed list cannot be mistaken for all of them.
+- **Bulk delete.** Tick several rules, or "select all shown", and remove them in one action. It is
+  a single storage write and a single notification to open tabs, rather than one of each per rule.
 
 ---
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import ReactDOM from 'react-dom/client';
-import { getStorageData, deleteRule, saveRule, saveSettings } from './utils/storage';
+import { getStorageData, deleteRule, deleteRules, saveRule, saveSettings } from './utils/storage';
 import { FaviconRule, GlobalSettings as GlobalSettingsType } from './types';
 import { FaviconEditor } from './components/FaviconEditor';
 import { GlobalSettings } from './components/options/GlobalSettings';
@@ -52,6 +52,14 @@ const OptionsApp: React.FC = () => {
                 setEditingRule(null);
             }
         }
+    };
+
+    // Bulk delete goes through deleteRules so it is one storage write and one
+    // tab broadcast, not one of each per rule.
+    const handleDeleteMany = async (ids: string[]) => {
+        await deleteRules(ids);
+        if (editingRule && ids.includes(editingRule.id)) setEditingRule(null);
+        refreshData();
     };
 
     const handleToggleEnabled = async (rule: FaviconRule) => {
@@ -137,6 +145,7 @@ const OptionsApp: React.FC = () => {
                                 editingRuleId={editingRule?.id}
                                 onEdit={setEditingRule}
                                 onDelete={handleDelete}
+                                onDeleteMany={handleDeleteMany}
                                 onToggleEnabled={handleToggleEnabled}
                             />
 
