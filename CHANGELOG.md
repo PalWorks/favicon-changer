@@ -10,6 +10,15 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+Nothing yet.
+
+---
+
+## [1.4.0]: 2026-09-06
+
+Flexible URL matching, the feature a Chrome Web Store review asked for, plus the correctness and
+hardening work that came with it.
+
 ### Added
 - **"URL Starts With" matching.** A rule can now cover every address beginning with a given
   prefix, which is how you keep one favicon on one document (a Google Sheet, a Notion page, a
