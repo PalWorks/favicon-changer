@@ -318,3 +318,41 @@ get subtly wrong.
 
 **Limit.** A page that reasserts its icon unconditionally and for ever will alternate with us; the
 100 ms debounce caps how often we write. See [LIMITATIONS.md](LIMITATIONS.md) L-33.
+
+---
+
+## ADR-015: Ask for a review once, on evidence of use, and never gate it on sentiment
+**Status**: Accepted · 2026-09-06
+
+**Decision.** A single review prompt, shown when the extension has applied a favicon on at least
+four separate days and the user still has a rule. One "Rate it" going straight to the store
+listing, one "No thanks" that is permanent. No second ask, ever, and no question asked before the
+link.
+
+**Why.** 983 users and 7 ratings is worth addressing, and asking is legitimate. How you ask is
+where this goes wrong:
+
+- **Counting opens would ask the wrong people.** Someone who opened the popup ten times on the day
+  they installed it is still deciding. The counter therefore advances only on days a rule was
+  actually applied to a page, which measures the extension working rather than being examined.
+- **Asking twice is a nag.** A favicon extension has no event worth a second ask. The dismissal is
+  persisted precisely so a later change cannot quietly turn this into a recurring prompt, and
+  `rating.test.ts` asserts it holds at 400 active days.
+- **Sentiment gating is out.** "Enjoying this? yes goes to the store, no goes to a feedback form"
+  filters the sample, is against Chrome Web Store policy, and is the reason store ratings are
+  widely distrusted. There is deliberately no fork in the code to extend.
+- **An inline strip, not a dialog.** The popup is a 400px working surface. It takes 47 of 600
+  pixels while it is there, and nothing while it is not.
+
+**If reversed.** A recurring or gated prompt trades a rating average for the trust that is this
+product's actual differentiation, on a listing whose reviews are already the main thing a
+prospective user reads.
+
+**Also.** The counter is local, one write per day at most, and it rides on a storage read the
+content script already makes, so a page load costs nothing extra on the other 364 days. Two tabs
+opening together on a new day can each count it, which over-counts by one; the value is only ever
+compared against a threshold, so the cost is that the ask arrives marginally sooner. Serialising
+it would mean waking the service worker on every page load, which is a worse trade. The privacy
+policy describes the counter explicitly, because a "days of use" number is exactly the thing a
+careful user would want to be told is not analytics.
+

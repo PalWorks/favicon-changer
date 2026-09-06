@@ -22,9 +22,9 @@ changes.
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 39 | Shipped and verified, latest 2026-09-06 in v1.4.1 |
-| Next up | 3 | R-15, R-48, R-39, in that order |
-| Pending | 5 | R-46 and R-47 need a decision; R-22, R-23, R-24 are projects |
+| Done | 41 | Shipped and verified, latest 2026-09-06 in v1.4.2 |
+| Next up | 2 | R-15 and R-39 |
+| Pending | 4 | R-46 needs a decision; R-22, R-23, R-24 are projects |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
 Table name: **roadmap-buckets**
@@ -74,6 +74,8 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-17 | Security contact | S | (2026-09-06) support@palworks.ai published in docs/SECURITY.md and the privacy policy, with a three-working-day acknowledgement |
 | R-40 | Dependabot | S | (2026-09-06) `.github/dependabot.yml`, grouped and weekly. Config only, no Actions minutes (ADR-012 holds) |
 | R-36 | Icon artwork oversized | S | (2026-09-06) `128.png` regenerated from the 497px master at 94x96 inside the 128 canvas, the ~96x96 Chrome asks for. 22 KB to 15 KB |
+| R-48 | Unit-test the observer's re-apply predicate | S | (2026-09-06) Extracted to `utils/faviconObserver.ts` and covered by 13 tests. Reintroducing the R-43 bug turns 5 of them red, verified by doing it |
+| R-47 | Rating prompt | S | (2026-09-06) One ask after four days of real use, permanent dismissal, no sentiment gating (ADR-015). 18 tests. Verified in the loaded extension on both surfaces |
 
 Table name: **roadmap-done**
 
@@ -82,7 +84,6 @@ Table name: **roadmap-done**
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
 | R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
-| R-48 | Unit-test the observer's re-apply predicate | S | **pending** | ADR-014 is verified live but nothing locks it; a marker-based check would pass every existing test |
 | R-39 | Store screenshots | S | **pending** | Blocks a listing update. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
 
 Table name: **roadmap-next**
@@ -102,7 +103,6 @@ run under the DevTools protocol against a real Chrome, so they are no longer a m
 | R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
 | R-46 | In-product support channel | 4 | S or M | Proposed 2026-09-06. `mailto:` with prefilled diagnostics is S and changes no promises; a hosted form is M and changes the privacy position. Needs a decision |
-| R-47 | Rating prompt | 4 | S | Proposed 2026-09-06. Ask once, after real use, never gated on sentiment. Needs a go-ahead |
 
 Table name: **roadmap-pending**
 
@@ -125,12 +125,12 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.4.1 (manifest and `package.json` aligned) |
+| Version | 1.4.2 (manifest and `package.json` aligned) |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
 | Users | 983 |
 | Rating | 4.4 ★ from 7 ratings |
 | Category | Developer Tools |
-| Tests | 190 across 8 files, including a jsdom lock on the favicon write path |
+| Tests | 221 across 10 files, including jsdom locks on both the favicon write path and the observer |
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
@@ -484,23 +484,43 @@ Drop `declare const chrome: any` from [content.ts:3](content.ts#L3) and
 [storage.ts:5](utils/storage.ts#L5); `@types/chrome` is already installed and configured (L-23).
 Expect real errors to surface, that is the point.
 
-### R-48 · Unit-test the observer's re-apply predicate · **S**
+### R-48 · Unit-test the observer's re-apply predicate · **S** · ✅ done 2026-09-06
 ADR-014 is the second load-bearing decision in the content script and nothing in the suite
 protects it. The bug it fixed, deciding ownership by the marker instead of by the href, would pass
 every test in the repo today, exactly as R-43 did for months. It is verified only by having driven
 a real browser, which is not a thing that runs on push.
 
-The DOM half is already isolated and jsdom is available, so the missing piece is stubbing
-`chrome.storage` and `MutationObserver` around `content.ts` and asserting three behaviours: a page
-write on the element we own triggers a re-apply, our own write does not, and a burst of page
-writes coalesces into one re-apply on the debounce. Doing this also opens up the do-nothing
-guard (ADR-002) and the self-stopping poller, which are equally untested.
+Done by extraction rather than by stubbing `content.ts`, following the precedent
+`utils/faviconDom.ts` set: `utils/faviconObserver.ts` now owns the predicate
+(`displacesFavicon`) and the debounce, imports nothing from `chrome.*`, and runs under jsdom with
+a real `MutationObserver`. 13 tests cover a page write on the element we own, our own write, a
+re-write of the same value, an appended icon link, unrelated head churn, an `apple-touch-icon`
+rewrite, coalescing a 20-write burst into one re-apply, settling rather than ping-ponging after we
+take the icon back, and disconnect cancelling a pending re-apply. Reintroducing the exact R-43 bug
+turns 5 of them red, verified by doing it. `content.ts` fell from 239 to 201 lines as a
+side effect.
+
+Still untested, and now cheaper than before: the do-nothing guard (ADR-002) and the self-stopping
+poller, both of which need `chrome.storage` stubbed around `content.ts` itself.
 
 ### R-15 · Extract the editor's logic into a hook · **M**
-[FaviconEditor.tsx](components/FaviconEditor.tsx) is ~520 lines with a `mode` × `context` matrix
-and effects that must not fire in the wrong combination (ADR-010). R-01 and R-02 both add state
-to it. Extract `useFaviconRuleEditor()` **before** Tier 1 if it can be done cheaply, or
-immediately after, not in the middle.
+[FaviconEditor.tsx](components/FaviconEditor.tsx) is 771 lines, up from ~520 when this was
+written, with a `mode` x `context` matrix and effects that must not fire in the wrong combination
+(ADR-010). R-01, R-02, R-41 and R-42 have all added state to it since.
+
+The case for doing it is that the component is now the single most likely place for a defect to
+hide: it holds nine pieces of state, five effects whose correctness depends on `mode` and
+`context`, and the save path for every rule the product creates. R-42 was exactly that kind of
+defect, a suggestion regenerated in one code path and not in the other, and it survived review
+because the rule about when the draft is rebuilt is spread across four call sites rather than
+stated once. Extracting `useFaviconRuleEditor()` puts that rule in one testable place and lets the
+editor's logic be unit tested at all, which today it cannot be.
+
+The case against doing it now is that it is a pure refactor with no user-visible benefit, on the
+component most recently changed and manually validated, and its riskiest part (the effect matrix)
+is the part a test suite does not yet cover. The safe order is therefore: cover the behaviour
+first, or split out the presentational pieces and the pure derivations only, and leave the effects
+until there is something to catch a mistake in them.
 
 ### R-29 · Clean the build config · **S** · ✅ done 2026-09-02
 Remove the unused `loadEnv`/`env` and the empty `define: {}` in `vite.config.ts` (L-28).
@@ -612,9 +632,9 @@ polite live region, and the debug log pane is `role="log"`.
 Emoji use a 64×64 canvas at 54px serif while every other source is 128×128, inconsistent
 sharpness on high-DPI, and tall glyphs can clip.
 
-### R-28 · Optimise the shipped logo · **S**
-`icons/FaviconChangerLogo.png` is 497×502 and 231 KB, about 40% of the package, for a 32px
-render (L-27).
+### R-28 · Optimise the shipped logo · **S** · ✅ done 2026-09-02
+`icons/FaviconChangerLogo.png` was 497x502 and 231 KB, about 40% of the package, for a 32px
+render (L-27). Replaced by a 160px `logo.png`, with the master kept in `store-assets/masters/`.
 
 ### R-34 · Reconsider the options-page Google lookup · **S** · *decided for now*
 ADR-011 keeps the `google.com/s2/favicons` preview and discloses it. If the zero-third-party
@@ -659,7 +679,7 @@ mail. It looks better and captures attachments, and it costs the following:
 on evidence.** If the mail that arrives is still unusable, or the volume justifies a queue, build
 the Worker then, and write the privacy policy change at the same time rather than after.
 
-### R-47 · Rating prompt after sustained use · **S** · *proposed 2026-09-06, needs a go-ahead*
+### R-47 · Rating prompt after sustained use · **S** · ✅ done 2026-09-06
 983 users and 7 ratings. Asking is reasonable; how you ask decides whether it helps.
 
 - **The trigger is successful use, not opens.** Count rules actually applied, and require both a
@@ -678,6 +698,22 @@ the Worker then, and write the privacy policy change at the same time rather tha
 
 No privacy consequence: the counter is local, and the link is a normal navigation the user
 chooses to make.
+
+**Shipped as described.** `utils/rating.ts` holds the decision, free of `chrome.*` so it is
+testable (18 tests); `components/RatingPrompt.tsx` renders an inline strip on the settings page
+and above the popup editor, and never in the expanded upload window, where interrupting a file
+upload to ask a favour would be rude. The threshold is four days on which a rule was actually
+applied, counted by the content script on the storage read `applyRule` already makes, at most one
+write a day, and not at all once the user has answered. The global fallback favicon deliberately
+does not count, since it applies to every unmatched page and would count days the user did
+nothing. Reasoning recorded as ADR-015 and the counter described in the privacy policy.
+
+Verified in the loaded extension: the strip renders 1152x54 on the settings page and 400x47 above
+the popup editor, leaving the editor its full 553px with no clipping and no horizontal overflow;
+"No thanks" writes `dismissed` and the strip stays gone across a reload; the counter reached
+`{activeDays: 1, lastActiveDay: "2026-09-06"}` on a real rule application and did not move on a
+second page load the same day. The review link returns 200 and resolves to the listing's reviews
+tab.
 
 ---
 

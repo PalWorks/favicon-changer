@@ -12,6 +12,21 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ---
 
+## [1.4.2]: 2026-09-06
+
+### Added
+- **A one-time review prompt.** After the extension has actually changed a favicon for you on
+  four separate days, a small strip asks once whether you would rate it. "No thanks" is
+  permanent, there is no second ask, and there is no question in front of the link deciding who
+  gets sent to the store. The counter behind it is a number on your device, described in the
+  privacy policy; nothing is sent anywhere.
+
+### Changed
+- The content script's favicon observer moved into its own module so its behaviour is covered by
+  tests. No change to what it does.
+
+---
+
 ## [1.4.1]: 2026-09-06
 
 Three bugs found by driving the loaded extension in a real browser for the first time, rather

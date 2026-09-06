@@ -117,7 +117,7 @@ All four sources converge on the same output: a PNG `data:` URL stored in `favic
 
 | Source | Produced by | Canvas size | Stored as |
 |---|---|---|---|
-| Emoji | [EmojiSection](../components/editor/EmojiSection.tsx), `fillText` at 54px serif | 64×64 | `data:image/png` |
+| Emoji | [EmojiSection](../components/editor/EmojiSection.tsx), `fillText` at 84% of the canvas | 128×128 | `data:image/png` |
 | Upload | [UploadSection](../components/editor/UploadSection.tsx), fit/fill/stretch, then `compressFaviconDataUrl` | 128×128 | `data:image/png` |
 | Image URL | UploadSection URL field | none | the remote URL, verbatim |
 | Badge / Overlay | [BadgeSection](../components/editor/BadgeSection.tsx), composited over the live site icon | 128×128 | `data:image/png` |

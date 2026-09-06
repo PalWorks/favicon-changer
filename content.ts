@@ -3,7 +3,9 @@
 import { FaviconRule, GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
-import { OBSERVER_DEBOUNCE_MS, MAX_STABLE_CHECKS } from './constants';
+import { MAX_STABLE_CHECKS } from './constants';
+import { RATING_KEY, dayKey, normalizeRatingState, withActiveDay } from './utils/rating';
+import { FaviconObserver, observeFaviconChanges } from './utils/faviconObserver';
 import {
   updateFavicon,
   readOriginalFaviconHref,
@@ -27,67 +29,26 @@ function applyFavicon(url: string) {
 // --- MATCHING ENGINE ---
 // (Logic moved to utils/matcher.ts)
 
-let observer: MutationObserver | null = null;
+let observer: FaviconObserver | null = null;
 let intervalId: any = null;
-let observerDebounceTimer: any = null;
 
 function setupObserver(targetUrl: string) {
   if (observer) observer.disconnect();
   if (intervalId) clearInterval(intervalId);
-  if (observerDebounceTimer) clearTimeout(observerDebounceTimer);
 
   const head = document.querySelector('head');
   if (!head) return;
 
-  // A. Mutation Observer for long-term changes
-  //
-  // Our own writes have to be told apart from the page's, and the ownership
-  // mark cannot do it. updateFavicon() repurposes the link Chrome is already
-  // tracking (ADR-001) and marks THAT element, so on an SPA that reasserts its
-  // own icon the page keeps rewriting the very element we marked. Skipping
-  // marked elements therefore filtered out every page write, leaving only the
-  // 2s backup poller to notice, and the site's icon won roughly 93% of the time
-  // with ours flickering in between (verified in a real browser, ROADMAP R-43).
-  //
-  // The href value is the honest test instead: if the icon link already points
-  // at our URL the write was ours, otherwise the page changed it and we
-  // re-apply. That also makes a loop impossible, since our own re-apply
-  // produces a mutation whose href matches and is ignored.
-  observer = new MutationObserver((mutations) => {
-    let shouldUpdate = false;
-    for (const mutation of mutations) {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeName === 'LINK') {
-            const link = node as HTMLLinkElement;
-            // A new icon link pointing anywhere but at our icon displaces us.
-            if (link.rel.includes('icon') && link.getAttribute('href') !== targetUrl) {
-              shouldUpdate = true;
-            }
-          }
-        });
-      } else if (mutation.type === 'attributes') {
-        const link = mutation.target as HTMLLinkElement;
-        if (link.nodeName === 'LINK' && link.rel.includes('icon') && link.getAttribute('href') !== targetUrl) {
-          shouldUpdate = true;
-        }
-      }
-    }
-
-    if (shouldUpdate) {
-      // Debounce: coalesce rapid mutation bursts (e.g. SPA re-hydration) into
-      // a single updateFavicon call to avoid thrashing the event loop.
-      clearTimeout(observerDebounceTimer);
-      observerDebounceTimer = setTimeout(() => {
-        logger.debug('[Content] Detected external change, re-applying (debounced)...');
-        applyFavicon(targetUrl);
-        // Re-arm the backup poller in case it had stopped after being stable.
-        if (!intervalId) startVerificationInterval(targetUrl);
-      }, OBSERVER_DEBOUNCE_MS);
-    }
+  // A. Mutation observer, for the page taking its icon back. The predicate and
+  // the debounce live in utils/faviconObserver.ts so they can be tested; read
+  // the note on displacesFavicon() there before changing how ownership of a
+  // write is decided. ADR-014.
+  observer = observeFaviconChanges(head, targetUrl, () => {
+    logger.debug('[Content] Detected external change, re-applying (debounced)...');
+    applyFavicon(targetUrl);
+    // Re-arm the backup poller in case it had stopped after being stable.
+    if (!intervalId) startVerificationInterval(targetUrl);
   });
-
-  observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href', 'rel'] });
 
   // B. Interval Check (Backup for SPAs/Hydration). Self-stops once stable.
   startVerificationInterval(targetUrl);
@@ -151,7 +112,7 @@ function applyRule() {
     return;
   }
 
-  chrome.storage.local.get(['rules', 'settings'], (result: StorageData) => {
+  chrome.storage.local.get(['rules', 'settings', RATING_KEY], (result: StorageData & Record<string, unknown>) => {
     const rules = result.rules || {};
     const settings = (result.settings || {}) as GlobalSettings;
 
@@ -168,6 +129,7 @@ function applyRule() {
       logger.info(`[Content] Applied rule: ${rule.matchType} match for ${rule.matcher}`);
       applyFavicon(rule.faviconUrl);
       setupObserver(rule.faviconUrl);
+      noteActiveDay(result[RATING_KEY]);
     } else if (settings.defaultFaviconUrl) {
       // Deliberately applies to EVERY page with no matching rule, whether or
       // not it has an icon of its own. Telling those two cases apart would need
@@ -196,12 +158,23 @@ function applyRule() {
         clearInterval(intervalId);
         intervalId = null;
       }
-      if (observerDebounceTimer) {
-        clearTimeout(observerDebounceTimer);
-        observerDebounceTimer = null;
-      }
     }
   });
+}
+
+// Records that the extension did something for the user today, which is what
+// the review ask is gated on (ROADMAP R-47). Piggybacks on the storage read
+// applyRule already makes, and writes at most once a day, so a page load costs
+// nothing extra on the 364 other occasions. Never runs once the user has
+// answered. Deliberately not called for the global fallback favicon, which
+// applies to every unmatched page and would count days the user did nothing.
+function noteActiveDay(raw: unknown) {
+  try {
+    const next = withActiveDay(normalizeRatingState(raw), dayKey());
+    if (next) chrome.storage.local.set({ [RATING_KEY]: next });
+  } catch (e) {
+    logger.debug('[Content] Could not record an active day', e);
+  }
 }
 
 // --- INITIALISATION ---

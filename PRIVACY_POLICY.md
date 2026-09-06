@@ -11,6 +11,11 @@ Favicon Changer Ultimate ("we", "our", or "us") is committed to protecting your 
 - **Local Processing**: All favicon processing (compression, resizing, emoji rendering, badge and overlay generation) happens locally within your browser.
 - **Storage**: Your custom rules and settings are stored in your browser's local storage (`chrome.storage.local`) on your device. This data is local-only and is not synced or sent anywhere.
 - **No Analytics**: We do not use any analytics or tracking scripts.
+- **Review prompt counter**: To decide whether to ask you once for a Chrome Web Store review, the
+  extension keeps a count of how many separate days it has actually applied a favicon for you,
+  plus the last such date and whether you have already answered. This is a number in your
+  browser's local storage on your device. It is never sent anywhere, it records no addresses and
+  no page information, and dismissing the prompt stops the counting for good.
 
 ## Network Requests
 The extension makes no network requests of its own accord. There are exactly three cases in which your browser fetches something on the extension's behalf, all of them a direct result of something you did:

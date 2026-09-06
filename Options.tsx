@@ -7,6 +7,7 @@ import { FaviconEditor } from './components/FaviconEditor';
 import { GlobalSettings } from './components/options/GlobalSettings';
 import { RulesList } from './components/options/RulesList';
 import { DebugLogs } from './components/options/DebugLogs';
+import { RatingPrompt } from './components/RatingPrompt';
 import './index.css';
 
 const OptionsApp: React.FC = () => {
@@ -89,6 +90,8 @@ const OptionsApp: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    <RatingPrompt ruleCount={rules.length} surface="options" />
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* Left Column: Editor */}

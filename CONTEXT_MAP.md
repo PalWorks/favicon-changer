@@ -31,7 +31,7 @@ Table name: **docs-by-question**
 
 | Area | Code | Docs |
 |---|---|---|
-| Favicon application, observers, DOM | [content.ts](content.ts) | ARCHITECTURE §3, ADR-001/002/003, DOMAIN §5 |
+| Favicon application, observers, DOM | [content.ts](content.ts), [utils/faviconDom.ts](utils/faviconDom.ts), [utils/faviconObserver.ts](utils/faviconObserver.ts) | ARCHITECTURE §3, ADR-001/002/003/014, DOMAIN §5 |
 | Rule matching and precedence | [utils/matcher.ts](utils/matcher.ts), [utils/matcher.test.ts](utils/matcher.test.ts) | DOMAIN §2, ROADMAP R-01/R-02/R-04 |
 | Storage, migration, import/export | [utils/storage.ts](utils/storage.ts) | ARCHITECTURE §6, ADR-004/005, SECURITY threats 1 to 3 |
 | Messaging and injection | [utils/messaging.ts](utils/messaging.ts) | ARCHITECTURE §5, ADR-008 |
@@ -40,6 +40,7 @@ Table name: **docs-by-question**
 | Icon generation, compression, MIME repair | [utils/canvas.ts](utils/canvas.ts) | DOMAIN §3 |
 | Options page | [Options.tsx](Options.tsx), [components/options/](components/options/) | ARCHITECTURE §1 |
 | Logging | [utils/logger.ts](utils/logger.ts) | ADR-009, RUNBOOK, SECURITY data rule 4 |
+| Review prompt policy | [utils/rating.ts](utils/rating.ts), [components/RatingPrompt.tsx](components/RatingPrompt.tsx) | ADR-015, ROADMAP R-47 |
 | Build | [vite.config.ts](vite.config.ts), [vite.content.config.ts](vite.content.config.ts) | ARCHITECTURE §2, ADR-006 |
 | Manifest, permissions, CSP | [public/manifest.json](public/manifest.json) | SECURITY |
 | Types and tuning constants | [types.ts](types.ts), [constants.ts](constants.ts) | DOMAIN §1 |

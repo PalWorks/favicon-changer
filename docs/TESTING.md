@@ -17,7 +17,7 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **190 tests across 8 files**, run time under a second.
+Current coverage: **221 tests across 10 files**, run time under two seconds.
 
 | File | Covers |
 |---|---|
@@ -28,6 +28,8 @@ Current coverage: **190 tests across 8 files**, run time under a second.
 | `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
 | `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
 | `storage.test.ts` | The v1 format migration, its latch, settings defaults, storage usage |
+| `faviconObserver.test.ts` | Whose write a head mutation was (ADR-014): a page write on the element we own, our own write, a re-write of the same value, an appended icon link, unrelated head churn; plus the debounce, coalescing, settling after a re-apply, and disconnect |
+| `rating.test.ts` | The review prompt's decision: day keys in local time, defensive parsing of hand-edited storage, one count per day, and that a dismissal is permanent |
 | `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), which link is chosen when a page has several (R-45), the no-op write, stale-link removal, pages with no icon link, original-icon capture and its preference for the real favicon over an `apple-touch-icon` (R-44) |
 
 Table name: **test-files**
