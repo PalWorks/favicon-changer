@@ -20,6 +20,15 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 **pending** agreed but not started · **standing** a decision already taken, no action unless it
 changes.
 
+| Bucket | Count | Where it stands |
+|---|---|---|
+| Done | 39 | Shipped and verified, latest 2026-09-06 in v1.4.1 |
+| Next up | 3 | R-15, R-48, R-39, in that order |
+| Pending | 5 | R-46 and R-47 need a decision; R-22, R-23, R-24 are projects |
+| Standing | 6 | Decided, revisit only if the reasoning changes |
+
+Table name: **roadmap-buckets**
+
 ### Done
 
 Dated 2026-09-02 unless the row says otherwise.
@@ -73,7 +82,8 @@ Table name: **roadmap-done**
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
 | R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
-| R-39 | Store screenshots | S | **pending** | Blocks a listing update, and needs real UI captures rather than generated images |
+| R-48 | Unit-test the observer's re-apply predicate | S | **pending** | ADR-014 is verified live but nothing locks it; a marker-based check would pass every existing test |
+| R-39 | Store screenshots | S | **pending** | Blocks a listing update. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
 
 Table name: **roadmap-next**
 
@@ -91,6 +101,8 @@ run under the DevTools protocol against a real Chrome, so they are no longer a m
 | R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
 | R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
 | R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
+| R-46 | In-product support channel | 4 | S or M | Proposed 2026-09-06. `mailto:` with prefilled diagnostics is S and changes no promises; a hosted form is M and changes the privacy position. Needs a decision |
+| R-47 | Rating prompt | 4 | S | Proposed 2026-09-06. Ask once, after real use, never gated on sentiment. Needs a go-ahead |
 
 Table name: **roadmap-pending**
 
@@ -472,6 +484,18 @@ Drop `declare const chrome: any` from [content.ts:3](content.ts#L3) and
 [storage.ts:5](utils/storage.ts#L5); `@types/chrome` is already installed and configured (L-23).
 Expect real errors to surface, that is the point.
 
+### R-48 · Unit-test the observer's re-apply predicate · **S**
+ADR-014 is the second load-bearing decision in the content script and nothing in the suite
+protects it. The bug it fixed, deciding ownership by the marker instead of by the href, would pass
+every test in the repo today, exactly as R-43 did for months. It is verified only by having driven
+a real browser, which is not a thing that runs on push.
+
+The DOM half is already isolated and jsdom is available, so the missing piece is stubbing
+`chrome.storage` and `MutationObserver` around `content.ts` and asserting three behaviours: a page
+write on the element we own triggers a re-apply, our own write does not, and a burst of page
+writes coalesces into one re-apply on the debounce. Doing this also opens up the do-nothing
+guard (ADR-002) and the self-stopping poller, which are equally untested.
+
 ### R-15 · Extract the editor's logic into a hook · **M**
 [FaviconEditor.tsx](components/FaviconEditor.tsx) is ~520 lines with a `mode` × `context` matrix
 and effects that must not fire in the wrong combination (ADR-010). R-01 and R-02 both add state
@@ -597,6 +621,63 @@ ADR-011 keeps the `google.com/s2/favicons` preview and discloses it. If the zero
 claim later matters more than the preview, the options are: drop the preview, or fetch
 `https://<domain>/favicon.ico` directly (which leaks the domain to that site instead and fails on
 many sites). No action unless that priority changes.
+
+---
+
+### R-46 · An in-product support channel · **S or M** · *proposed 2026-09-06, needs a decision*
+Today a user with a problem has the Chrome Web Store support page and nothing else, and the
+reports that arrive have no version, no browser build and no reproduction. The extension already
+has the missing half: opt-in verbose logging the user can download.
+
+Two shapes, and they are not the same product.
+
+**S, a prefilled `mailto:`.** A "Contact support" action composes a mail to support@palworks.ai
+with the subject and body already carrying the extension version, the browser and OS strings, the
+rule count, whether logging was on, and a line telling the user to attach the log file they can
+download from the same page. It sends from the user's own mail client. No server, no key, no new
+network request, no change to the privacy policy, no change to the store's data disclosure, and
+nothing to rate-limit. It cannot capture attachments automatically and it cannot be styled.
+
+**M, a hosted form.** Name, email, description, attachments, posted to an endpoint that sends the
+mail. It looks better and captures attachments, and it costs the following:
+
+- **The API key cannot live in the extension.** A published extension is a public archive; anyone
+  can read a key out of it and then send mail as palworks.ai. That is already a standing decision
+  in this document. It needs a relay you control, a Cloudflare Worker holding the key, with a
+  rate limit, a body-size cap and abuse protection, because an unauthenticated send endpoint is a
+  spam cannon.
+- **It breaks the product's central promise.** The listing, the README and the privacy policy all
+  say there is no server and nothing is collected. A form that posts a name, an email address and
+  attachments to infrastructure you run makes that untrue. The store's data disclosure would have
+  to declare personally identifiable information and user communications, and the change is
+  material enough to expect a re-review.
+- **Drop the phone number** in either shape. There is no support workflow here that phones anyone,
+  it is the field most likely to stop someone submitting, and it is regulated personal data you
+  would then be holding for no purpose.
+
+**Recommendation: ship the `mailto:` now, and treat the hosted form as a separate decision taken
+on evidence.** If the mail that arrives is still unusable, or the volume justifies a queue, build
+the Worker then, and write the privacy policy change at the same time rather than after.
+
+### R-47 · Rating prompt after sustained use · **S** · *proposed 2026-09-06, needs a go-ahead*
+983 users and 7 ratings. Asking is reasonable; how you ask decides whether it helps.
+
+- **The trigger is successful use, not opens.** Count rules actually applied, and require both a
+  count (10 or so) and elapsed time since install (3 days or so), so it reaches settled users
+  rather than someone still deciding.
+- **Ask once.** Persist the state in `chrome.storage.local`: asked, dismissed, or done. A
+  dismissal is permanent. Nothing about this product justifies asking twice.
+- **Never gate on sentiment.** "Enjoying it? yes goes to the store, no goes to a feedback form" is
+  review gating, it is against store policy, and it is the reason store ratings are distrusted.
+  One ask, one link to
+  `https://chromewebstore.google.com/detail/<extension-id>/reviews`, one "no thanks" that sticks.
+- **An inline banner, not a modal.** The popup is a 400px working surface; a dialog across it to
+  ask for a favour is the wrong trade.
+- **It pairs with R-46.** The people most likely to leave one star are the ones who hit a bug and
+  had nowhere to go, so the support path is worth shipping first or alongside.
+
+No privacy consequence: the counter is local, and the link is a normal navigation the user
+chooses to make.
 
 ---
 
