@@ -16,11 +16,14 @@ import { BadgeSection } from './editor/BadgeSection';
 
 // The scope control. Order is deliberate: the original two come first so
 // existing users' muscle memory still works, with the two pattern types after.
-const SCOPES: { type: MatchType; label: string; hint: string }[] = [
-    { type: 'domain', label: 'Entire Domain', hint: 'Every page on this site, subdomains included.' },
-    { type: 'exact_url', label: 'This Page Only', hint: 'Only this exact address, query string and all.' },
-    { type: 'prefix', label: 'URL Starts With', hint: 'Every address beginning with this text. Good for one document across its views.' },
-    { type: 'regex', label: 'Regex', hint: 'A regular expression tested against the whole URL. Unanchored unless you add ^.' },
+// `short` goes on the buttons, which sit in one row of four and have to fit the
+// 400px popup; `label` is the readable form used in prose. The hint under the
+// row carries the explanation, so the buttons do not have to.
+const SCOPES: { type: MatchType; label: string; short: string; hint: string }[] = [
+    { type: 'domain', label: 'Entire Domain', short: 'Domain', hint: 'Every page on this site, subdomains included.' },
+    { type: 'exact_url', label: 'This Page Only', short: 'This Page', hint: 'Only this exact address, query string and all.' },
+    { type: 'prefix', label: 'URL Starts With', short: 'Starts With', hint: 'Every address beginning with this text. Good for one document across its views.' },
+    { type: 'regex', label: 'Regex', short: 'Regex', hint: 'A regular expression tested against the whole URL. Unanchored unless you add ^.' },
 ];
 
 // Scopes whose matcher is a pattern the user edits, rather than being taken
@@ -272,6 +275,30 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
     }, [applyScope, currentMatcher, patternError, openTabs, targetUrl, targetDomain]);
 
     const activeScope = SCOPES.find(s => s.type === applyScope);
+
+    // One row of four. The buttons carry short labels so they fit the 400px
+    // popup without wrapping; the line beneath explains the selected one.
+    const scopeSelector = (
+        <div className="mb-3">
+            <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-lg">
+                {SCOPES.map(scope => (
+                    <button
+                        key={scope.type}
+                        onClick={() => selectScope(scope.type)}
+                        title={`${scope.label}: ${scope.hint}`}
+                        aria-label={scope.label}
+                        aria-pressed={applyScope === scope.type}
+                        className={`py-1.5 px-1 text-xs font-medium rounded-md transition-all whitespace-nowrap ${applyScope === scope.type ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        {scope.short}
+                    </button>
+                ))}
+            </div>
+            {activeScope && (
+                <p className="text-[10px] text-slate-400 leading-snug mt-1.5 px-1">{activeScope.hint}</p>
+            )}
+        </div>
+    );
 
     const handleSave = async (url: string, sourceType: FaviconRule['sourceType'], metadata?: FaviconRule['metadata']) => {
         setIsSaving(true);
@@ -555,6 +582,13 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                             </div>
                         </div>
 
+                        {/* In options mode the URL field is the target, so the scope
+                            control sits above it: it decides how that text will be
+                            read. In the popup the target is the current tab, and the
+                            site line below is the header's subtitle, so the selector
+                            follows it instead. */}
+                        {mode === 'options' && scopeSelector}
+
                         {/* URL Input / Display */}
                         {mode === 'options' ? (
                             <div className="mb-4">
@@ -590,25 +624,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                             </div>
                         )}
 
-                        {/* Scope selector. A 2x2 grid rather than one row so the
-                            labels stay readable in the 400px popup. */}
-                        <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-lg">
-                            {SCOPES.map(scope => (
-                                <button
-                                    key={scope.type}
-                                    onClick={() => selectScope(scope.type)}
-                                    title={scope.hint}
-                                    aria-pressed={applyScope === scope.type}
-                                    className={`py-1.5 px-1 text-xs font-medium rounded-md transition-all ${applyScope === scope.type ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    {scope.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        {activeScope && (
-                            <p className="text-[10px] text-slate-400 leading-snug mt-2 px-1">{activeScope.hint}</p>
-                        )}
+                        {mode === 'popup' && scopeSelector}
 
                         {/* Pattern editor, for the scopes whose matcher is not
                             taken from the target page. */}
@@ -667,9 +683,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({ mode, context = 'a
                                     </div>
                                 ) : (
                                     <p className="text-[10px] text-slate-400">
-                                        {applyScope === 'prefix'
-                                            ? 'Every address beginning with this text will use your icon.'
-                                            : 'Tested against the whole URL. Add ^ to anchor it to the start.'}
+                                        Matching open tabs are listed here as you type.
                                     </p>
                                 )}
                             </div>
