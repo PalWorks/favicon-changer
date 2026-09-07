@@ -9,6 +9,11 @@ listing's current values were read off the public listing page on the same day.
 
 Submission steps live in [PUBLISHING.md](PUBLISHING.md) §1; this file is only the content.
 
+> **Status, 2026-09-07: 1.4.4 has been submitted to the Chrome Web Store and is in review.** The
+> data usage disclosures were submitted with **Web history left unchecked**, the recorded decision
+> in §2. Nothing in this file needs editing for that submission; it stands as the record of what
+> was sent, and as the source for the next one.
+
 ---
 
 ## 0. What the live listing says today
@@ -27,7 +32,9 @@ Submission steps live in [PUBLISHING.md](PUBLISHING.md) §1; this file is only t
 Table name: **listing-current**
 
 **So the store is five versions behind the code:** 1.4.0, 1.4.1, 1.4.2, 1.4.3 and 1.4.4 are all
-unpublished. The 1.4.4 package carries every one of those changes.
+unpublished at the time this was written. The 1.4.4 package carries every one of those changes,
+and was submitted for review on 2026-09-07. Until review completes, the values in
+**listing-current** above are still what a visitor sees.
 
 ---
 
@@ -202,8 +209,8 @@ Manifest V3 forbids remotely hosted code in any case.
 
 ### Data usage disclosures
 
-This is a judgment call you are certifying, not a fact I can hand you, so here is the ground
-truth and then the recommendation.
+This is a judgment call you certify, so here is the ground truth and then the call that was
+made.
 
 Google's user data FAQ states plainly: "Extensions are required to disclose how they handle user
 data, even when data is processed or stored locally on a user's device and is not transmitted to
@@ -227,8 +234,9 @@ And the three cases where something does leave, all enumerated in
 of the current page's own icon, and, **on the settings page only**, a request to Google's public
 favicon service carrying the domain the user typed into the rule editor.
 
-**Recommendation.** Leave every data-type box unchecked **except** to consider **Web history**,
-and read the two paragraphs below before deciding.
+**Decision, 2026-09-07: every data-type box left unchecked, Web history among them.** That is how
+1.4.4 was submitted. The reasoning is kept below because the same call has to be made again on the
+next submission, and because a reviewer may ask for it.
 
 - **The case for leaving Web history unchecked:** the extension records no history of anything. It
   stores a configuration the user authored. A list of sites someone chose to give an icon is not a
@@ -238,12 +246,18 @@ and read the two paragraphs below before deciding.
   typed domain to Google. Google's definition of collection is broad and explicitly covers local
   handling.
 
-My recommendation is to **leave it unchecked and keep the privacy policy carrying the detail**,
-because the policy already describes every one of those items explicitly and in more depth than a
-checkbox can, which is what the disclosure requirement is actually for. This matches what the live
-listing already declares. If you would rather be maximally conservative, checking Web history costs
-you a line of small print on the listing and nothing else, and it is defensible on the debug-log
-and favicon-preview grounds. **It is your certification either way, so make the call deliberately.**
+**The ground for the decision taken:** the privacy policy already describes every one of those
+items explicitly and in more depth than a checkbox can, which is what the disclosure requirement is
+actually for, and it matches what the live listing already declares. Checking Web history remains
+defensible on the debug-log and favicon-preview grounds, and would cost a line of small print and
+nothing else, so it stays the fallback if a reviewer disagrees.
+
+**If review pushes back on this specific answer**, the options are: tick **Web history** and
+resubmit the same package with no code change, which is the cheapest fix and the one to take; or
+argue the current answer with the policy as evidence, which costs another review cycle and may not
+land; or remove the two features that make the argument arguable, the opt-in debug log's page
+addresses and the settings-page favicon preview, which is a real product loss for a paperwork
+problem. **Recommendation: tick the box and resubmit.**
 
 ### Certifications
 

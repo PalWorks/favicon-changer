@@ -35,6 +35,11 @@ reject a re-upload of a version it already has, so bump before resubmitting.
 
 **The only channel in use.** Listing: `egedbdckafdbomehjaihjhbcgmngmlah`.
 
+> **1.4.4 was submitted for review on 2026-09-07 and is in review.** The privacy answers on file
+> were left as they were, with **Web history unchecked**; the reasoning and the fallback if a
+> reviewer disagrees are recorded in [STORE_LISTING.md](STORE_LISTING.md) §2. Review has
+> historically taken a few days. The store still serves 1.3.0 until it completes.
+
 1. `npm run check && npm run build`, then zip `dist/` as in §0.
 2. Upload the zip in the developer dashboard against the existing item.
 3. Check the privacy disclosures still match [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md). They
@@ -42,6 +47,10 @@ reject a re-upload of a version it already has, so bump before resubmitting.
    support mail draft are both described there now.
 4. Paste the release notes from [../CHANGELOG.md](../CHANGELOG.md) for that version.
 5. Submit. Review has historically taken a few days.
+6. When review completes, update the **listing-current** table in
+   [STORE_LISTING.md](STORE_LISTING.md) §0 and the **product-snapshot** version row in
+   [../ROADMAP.md](../ROADMAP.md), and tag the commit that shipped (`git tag v1.4.4`), so the tag
+   marks what is actually live rather than what was built.
 
 Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
 Every field's copy, measured against the store's limits, is in [STORE_LISTING.md](STORE_LISTING.md).

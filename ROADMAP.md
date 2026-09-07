@@ -161,7 +161,7 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.4.4 (manifest and `package.json` aligned), packaged and unpublished |
+| Version | 1.4.4 (manifest and `package.json` aligned), packaged and **submitted to the Chrome Web Store on 2026-09-07, in review**. The store serves 1.3.0 until review completes |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
 | Users | 1,000 (listing, read 2026-09-07) |
 | Rating | 4.5 from 8 ratings |
@@ -912,9 +912,9 @@ extension can never hold that credential, and there is no configuration in which
 arrives is still unusable, or the volume justifies a queue, build the Worker then, and write the
 privacy policy change at the same time rather than after.
 
-**What shipped.** [utils/support.ts](../utils/support.ts) composes the subject and body and is free
+**What shipped.** [utils/support.ts](utils/support.ts) composes the subject and body and is free
 of `chrome.*` and of the DOM, so what the mail says is tested rather than inspected (24 tests).
-[components/options/SupportSection.tsx](../components/options/SupportSection.tsx) renders a "Get
+[components/options/SupportSection.tsx](components/options/SupportSection.tsx) renders a "Get
 help" section on the settings page: a "Contact support" link, a "Copy diagnostics" button for
 anyone on webmail or without a mail client, and a collapsed block showing exactly what the draft
 contains. The body adapts to whether verbose logging is already on, so nobody is told to switch on
