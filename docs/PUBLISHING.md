@@ -47,10 +47,16 @@ reject a re-upload of a version it already has, so bump before resubmitting.
    support mail draft are both described there now.
 4. Paste the release notes from [../CHANGELOG.md](../CHANGELOG.md) for that version.
 5. Submit. Review has historically taken a few days.
-6. When review completes, update the **listing-current** table in
+6. Tag the submitted commit, so a store version can always be traced back to a tree:
+   `git tag -a v1.4.4 -m "..." && git push origin v1.4.4`. Put the package's sha256 in the tag
+   message; that is what makes the tag a receipt rather than a label.
+7. When review completes, update the **listing-current** table in
    [STORE_LISTING.md](STORE_LISTING.md) §0 and the **product-snapshot** version row in
-   [../ROADMAP.md](../ROADMAP.md), and tag the commit that shipped (`git tag v1.4.4`), so the tag
-   marks what is actually live rather than what was built.
+   [../ROADMAP.md](../ROADMAP.md).
+
+> `v1.4.4` was tagged at submission on 2026-09-07, pointing at `de1793a`. The code in that tree is
+> identical to the packaged commit `b26a8b9`; the two commits between them touch documentation only,
+> which was verified with `git diff b26a8b9 HEAD -- . ':(exclude)*.md'` before tagging.
 
 Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
 Every field's copy, measured against the store's limits, is in [STORE_LISTING.md](STORE_LISTING.md).
