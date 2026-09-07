@@ -208,9 +208,15 @@ call-graph glance, but was wired to a visible button. Confirm against the JSX, n
 ## 6. Platform and reach
 
 ### L-20 · Chrome/Chromium only → **R-23**
-Raw `chrome.*` globals with `declare const chrome: any`, MV3 service worker, `chrome.action`.
-Edge is likely to work as-is; Firefox needs the `browser` namespace, an `event_page`/background
-script shim and a manifest variant.
+MV3 service worker, `chrome.action`, and `chrome.*` globals throughout.
+
+**Corrected 2026-09-07 by testing rather than reasoning.** Edge is Chromium and takes the same
+package; the work there is a Partner Center submission. Firefox 154 was installed from the built
+`dist/` over WebDriver BiDi and driven end to end: **every `chrome.*` API this extension uses
+exists there**, so the `browser` namespace shim this entry used to claim is not needed. What is
+needed is two manifest lines (`background.scripts` instead of `background.service_worker`, and a
+`browser_specific_settings.gecko.id`). See ROADMAP R-23 for what was measured and what is still
+untested, and [PUBLISHING.md](PUBLISHING.md) for the submissions themselves.
 
 ### L-21 · English only → **R-22**
 No `_locales`, every string inline in TSX. 983 users with no localisation ceiling lifted.

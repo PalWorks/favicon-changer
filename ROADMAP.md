@@ -22,9 +22,9 @@ changes.
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 43 | Shipped and verified, latest 2026-09-07 in v1.4.3 |
+| Done | 44 | Shipped and verified, latest 2026-09-07 in v1.4.3 |
 | Next up | 1 | R-39, which needs real UI captures |
-| Pending | 4 | R-46 needs a decision; R-22, R-23, R-24 are projects |
+| Pending | 3 | R-22, R-23 and R-24, each a project. R-24 agreed as opt-in and off by default |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
 Table name: **roadmap-buckets**
@@ -76,6 +76,7 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-36 | Icon artwork oversized | S | (2026-09-06) `128.png` regenerated from the 497px master at 94x96 inside the 128 canvas, the ~96x96 Chrome asks for. 22 KB to 15 KB |
 | R-48 | Unit-test the observer's re-apply predicate | S | (2026-09-06) Extracted to `utils/faviconObserver.ts` and covered by 13 tests. Reintroducing the R-43 bug turns 5 of them red, verified by doing it |
 | R-47 | Rating prompt | S | (2026-09-06) One ask after four days of real use, permanent dismissal, no sentiment gating (ADR-015). 18 tests. Verified in the loaded extension on both surfaces |
+| R-46 | In-product support channel | S | (2026-09-07) "Get help" composes a `mailto:` carrying the version, browser, platform and rule count. No server, no key, no promise changed (ADR-017). 24 tests. Verified in the loaded extension, clipboard fallback included |
 | R-15 | Extract the editor's logic into a hook | M | (2026-09-07) 771 lines down to 213 of markup over a hook and a pure reducer. An unedited pattern is now derived, not stored (ADR-016), which removed two pieces of state, one effect, and a corruption bug in "Edit that rule instead" reproduced in a real browser against both builds. 52 new tests |
 | R-49 | A junk domain rule could be saved | S | (2026-09-07) Chrome percent-encodes illegal host characters where Node throws, so "not a url at all" saved a rule that could match nothing. Hostname shape is checked now, and `localhost:3000` reads as a host and port rather than a scheme |
 
@@ -85,7 +86,7 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-39 | Store screenshots | S | **pending** | Blocks a listing update. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
+| R-39 | Store screenshots | S | **pending** | Blocks a Chrome listing update and an Edge submission. Capture at **1280x800**, the one size both stores accept. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
 
 Table name: **roadmap-next**
 
@@ -101,9 +102,8 @@ run under the DevTools protocol against a real Chrome, so they are no longer a m
 | ID | Item | Tier | Effort | Note |
 |---|---|---|---|---|
 | R-22 | Internationalisation | 5 | M | Planned 2026-09-07. About 114 UI strings, plus 693 emoji keywords as a separate call. Needs a decision on which languages |
-| R-23 | Firefox and Edge | 5 | S + M | Planned 2026-09-07. Edge is paperwork. Firefox verified working on 154 with two manifest lines and no shim; the open risk is the AMO host-permission model |
-| R-24 | Cross-device sync | 5 | L | Planned 2026-09-07. Sync reproducible rule metadata, not rendered icons. Needs a decision: it puts the rule list in the user's Google account |
-| R-46 | In-product support channel | 4 | S or M | Planned 2026-09-07. Prefilled `mailto:` changes no promises (S); a hosted form needs a Worker holding the key and changes the privacy position (M). Needs a decision |
+| R-23 | Firefox and Edge | 5 | S + M | Planned 2026-09-07, walkthrough in [docs/PUBLISHING.md](docs/PUBLISHING.md). Edge is paperwork and the listing copy is drafted. Firefox verified working on 154 with two manifest lines and no shim; needs a source submission and a licence choice |
+| R-24 | Cross-device sync | 5 | L | Planned 2026-09-07. Sync reproducible rule metadata, not rendered icons. Agreed 2026-09-07 as opt-in and off by default, with the privacy policy changed in the same release |
 
 Table name: **roadmap-pending**
 
@@ -699,7 +699,7 @@ many sites). No action unless that priority changes.
 
 ---
 
-### R-46 · An in-product support channel · **S or M** · *planned 2026-09-07, needs a decision*
+### R-46 · An in-product support channel · **S** · ✅ done 2026-09-07
 Today a user with a problem has the Chrome Web Store support page and nothing else, and what
 arrives has no version, no browser build and no reproduction. The extension already has the
 missing half: opt-in verbose logging the user can download.
@@ -745,9 +745,29 @@ that sends the mail. It looks better, it captures attachments, and it costs the 
 That is useful for sending mail *from here*; it is not a route to the extension sending mail. The
 extension can never hold that credential, and there is no configuration in which it should.
 
-**Recommendation: ship A now, and treat B as a separate decision taken on evidence.** If the mail
-that arrives from A is still unusable, or the volume justifies a queue, build the Worker then, and
-write the privacy policy change at the same time rather than after.
+**Variant A shipped, and B stays a separate decision taken on evidence.** If the mail that
+arrives is still unusable, or the volume justifies a queue, build the Worker then, and write the
+privacy policy change at the same time rather than after.
+
+**What shipped.** [utils/support.ts](../utils/support.ts) composes the subject and body and is free
+of `chrome.*` and of the DOM, so what the mail says is tested rather than inspected (24 tests).
+[components/options/SupportSection.tsx](../components/options/SupportSection.tsx) renders a "Get
+help" section on the settings page: a "Contact support" link, a "Copy diagnostics" button for
+anyone on webmail or without a mail client, and a collapsed block showing exactly what the draft
+contains. The body adapts to whether verbose logging is already on, so nobody is told to switch on
+something that is on. Reasoning recorded as ADR-017, and the privacy policy now describes what the
+draft carries.
+
+Verified in the loaded extension: the section renders 560x220 with no horizontal overflow, the
+composed URL is 877 characters against the 2000 cap, the subject reads "Support request: Favicon
+Changer Ultimate 1.4.3 on Chrome 152", and the body carries the version, "Chrome 152", "Linux
+x86_64", the full user agent and the rule count. Turning verbose logging on in the section below
+flipped the draft to "already on" without a reload, and writing a rule moved "Rules saved" from 0
+to 1, both through `storage.onChanged` rather than a poll. "Copy diagnostics" was clicked with real
+input events and the clipboard was read back by pasting it into a scratch field: it holds exactly
+the block shown on the page. The one step not driven is the click itself, because handing the URL
+to the OS would have launched Thunderbird on the maintainer's desktop mid-session; the anchor is a
+plain `mailto:` link and the URL is verified well formed.
 
 ### R-47 · Rating prompt after sustained use · **S** · ✅ done 2026-09-06
 983 users and 7 ratings. Asking is reasonable; how you ask decides whether it helps.
@@ -810,10 +830,41 @@ would otherwise render bare message keys. Import `_locales/en/messages.json` dir
 one source of truth rather than a second English copy to drift.
 
 **Decision 1: which languages.** The Chrome Web Store dashboard breaks installs down by country;
-that list should choose, not a guess. The real constraint is verification: a mistranslated
-technical UI ("prefix", "regex", "matcher") is worse than English, and machine translation cannot
-be spot-checked in a language nobody on the project reads. Recommended: start with the two or three
-that have both real install numbers and a reader here, and add more only as they can be checked.
+that list should choose, not a guess. Note that "published in all countries" is the *availability*
+setting and says nothing about who installed it. The real constraint is verification: a
+mistranslated technical UI ("prefix", "regex", "matcher") is worse than English, and machine
+translation cannot be spot-checked in a language nobody on the project reads.
+
+**What comparable extensions carry**, counted from their repositories on 2026-09-07:
+
+| Extension | Locales in `_locales` |
+|---|---|
+| uBlock Origin | 71 |
+| Bitwarden | 63 |
+| Dark Reader | 43 |
+| Privacy Badger | 29 |
+
+Table name: **r22-market-comparison**
+
+Those counts are the wrong thing to imitate, and the reason is who wrote them. Privacy Badger
+carries a Transifex configuration in its repository, and projects at that scale generally take
+translations from volunteers or a translation platform rather than from the maintainer.
+[Unverified] for the other three specifically. A single publisher shipping 60 machine-translated
+locales is shipping 60 unverifiable surfaces, in a UI whose load-bearing words are "prefix",
+"regex" and "matcher".
+
+Also note that "top ten countries by internet users" is the wrong proxy if the dashboard number is
+missing. What decides which catalogue a user sees is their **browser UI language**, not their
+country, and the two diverge hardest exactly where the population numbers are largest: China is
+barely a Chrome Web Store market at all, and a large share of Indian Chrome users run an English
+UI.
+
+**Recommended, in this order.** Extract to `en` and ship that alone, which is the whole refactor
+and turns every later language into a data file. Then translate the **store listing** before the
+UI, because it is what a prospective user reads before they install anything and it is done in the
+dashboard rather than in the repository. Then add UI languages two or three at a time, each with a
+reader who can check the twenty load-bearing strings, starting from the dashboard's install
+breakdown.
 
 **Decision 2: the 693 emoji keywords.** They exist so emoji search works. Either leave them English
 and accept that search does not work in other languages (S, honest, and search is a convenience),
@@ -846,6 +897,12 @@ actually installed and driven, and **the shim assumption was wrong**. What follo
 listing to keep in step, not code. Do it separately and first: a day of paperwork for a second
 distribution channel.
 
+**Step by step for both stores, with the listing copy drafted and every requirement read off the
+vendor's own docs on 2026-09-07: [docs/PUBLISHING.md](docs/PUBLISHING.md).** Registration for the
+Edge program is free, an individual account verifies in hours where a company account can take
+weeks, and certification runs up to seven business days. The only thing blocking an Edge
+submission today is R-39.
+
 **Firefox 154, verified.** The built `dist/` was installed as a temporary add-on over WebDriver
 BiDi and exercised end to end.
 
@@ -874,9 +931,19 @@ keep in sync by hand.
 
 **Still unknown, and stated as such.** None of these were tested, and each must be before shipping:
 
-- **Host permissions.** `<all_urls>` behaved as granted under a *temporary* install. A signed AMO
-  install may present it as opt-in per site, which would mean the extension does nothing until the
-  user grants access, and that needs its own onboarding copy. The largest remaining risk.
+- ~~**Host permissions.**~~ **Resolved 2026-09-07 from Mozilla's own documentation, not by
+  reasoning.** The MV3 migration guide states that Firefox 127 and later show the host permissions
+  from `host_permissions` and `content_scripts` in the install prompt and **grant them on
+  installation**; a user can still revoke one ad hoc afterwards. So there is no per-site onboarding
+  flow to build. What remains is that the extension should behave sanely on a host whose permission
+  was revoked, where the content script does not run and the icon does not change. A line of copy,
+  not a project.
+- **A source-code submission is required.** AMO requires source when a package contains minified
+  code, and Vite minifies everything in `dist/`. That means a source archive plus reproducible
+  build instructions with every submission. Newly found, and the one thing that makes the Firefox
+  submission heavier than the Edge one.
+- **AMO makes you choose a licence**, and this repository has no `LICENSE` file. See
+  [docs/PUBLISHING.md](docs/PUBLISHING.md) §3.4 for the options and a recommendation.
 - **AMO review and signing**, and what `strict_min_version` to actually claim.
 - **ADR-007**, the Linux file-dialog workaround. Firefox panel blur behaviour differs, so the
   `setPopup('')` trick may be unnecessary or may misbehave.
@@ -886,7 +953,7 @@ keep in sync by hand.
 **Revised estimate.** Firefox is a week, dominated by the permission model and store review rather
 than by code. The `browser`-versus-`chrome` work that made this look like a project does not exist.
 
-### R-24 · Cross-device sync · **L** · *planned 2026-09-07, needs a decision on the privacy trade*
+### R-24 · Cross-device sync · **L** · *planned 2026-09-07, privacy trade decided 2026-09-07*
 Not a storage-area swap, and the reason is arithmetic. `chrome.storage.sync` is documented at
 roughly 100 KB total, **8 KB per item**, 512 items, and write quotas around 1800 an hour and 120 a
 minute (verify against current docs before building). A 128x128 PNG data URL is 12 to 25 KB, so a
@@ -916,6 +983,10 @@ claim is that nothing leaves the device. So: **off by default, opt-in, with copy
 what leaves and where it goes**, and a matching paragraph in the privacy policy and the store's
 data disclosure. Shipping it on by default would be a breach of the promise the listing makes,
 whatever the code does.
+
+**Decided 2026-09-07: opt-in, off by default, policy changed in the same release.** So the
+switch, its copy, the privacy policy paragraph and the store data disclosure are part of the work,
+not a follow-up, and no build ships the storage change with the switch missing.
 
 **The hard parts, in order of how much they will hurt.**
 

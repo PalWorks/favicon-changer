@@ -1,18 +1,22 @@
 # Store assets
 
-Images for the Chrome Web Store listing. Nothing here is part of the extension build: the
-packaged icons live in [../public/icons/](../public/icons/) and are copied into `dist/` by Vite.
+Images for the Chrome Web Store and Microsoft Edge Add-ons listings. Nothing here is part of the
+extension build: the packaged icons live in [../public/icons/](../public/icons/) and are copied
+into `dist/` by Vite. The submission walkthroughs are in [../docs/PUBLISHING.md](../docs/PUBLISHING.md).
 
 ## Upload these
 
 | File | Size | Where it goes |
 |---|---|---|
-| `small-promo-tile-440x280.png` | 440x280 | Store listing, **required** |
-| `marquee-promo-tile-1400x560.png` | 1400x560 | Marquee placement, optional |
+| `small-promo-tile-440x280.png` | 440x280 | Chrome listing **required**, Edge optional |
+| `marquee-promo-tile-1400x560.png` | 1400x560 | Chrome marquee placement, Edge "large promotional tile", both optional |
+| `edge-store-logo-300x300.png` | 300x300 | Edge listing **required** (1:1, 300x300 recommended, 128x128 minimum). Chrome takes its icon from the package instead |
 
 Table name: **store-upload-assets**
 
-Screenshots still need producing at 1280x800 or 640x400, minimum one and maximum five.
+Screenshots still need producing (R-39). **Capture them at 1280x800**, which is the one size both
+stores accept: Chrome takes 1280x800 or 640x400, Edge takes 1280x800 or 640x480. Chrome allows one
+to five, Edge up to six.
 
 ## Requirements
 
@@ -28,9 +32,9 @@ on 2026-09-02:
 
 Table name: **store-image-specs**
 
-Our `public/icons/128.png` is a correct 128x128 but its artwork fills roughly 122x122, well
-beyond the suggested 96x96. That is a branding call rather than a rejection risk; tracked as
-ROADMAP R-36.
+`public/icons/128.png` was regenerated for this on 2026-09-06 (R-36): the artwork is now 94x96
+centred in the 128 canvas, as Chrome asks. `16.png` and `48.png` deliberately still fill their
+canvases, because a margin at those sizes costs legibility for nothing.
 
 ## masters/
 
@@ -42,7 +46,7 @@ and are off-spec (1200x896 and 1632x656).
 |---|---|---|
 | `small-promo-tile-source.png` | 1200x896 | `small-promo-tile-440x280.png` |
 | `marquee-promo-tile-source.png` | 1632x656 | `marquee-promo-tile-1400x560.png` |
-| `logo-source-497px.png` | 497x502 | `public/icons/128.png` and `public/icons/logo.png` |
+| `logo-source-497px.png` | 497x502 | `public/icons/128.png`, `public/icons/logo.png` and `edge-store-logo-300x300.png` |
 
 Table name: **store-master-assets**
 
@@ -52,3 +56,8 @@ unchanged; nothing was restyled. The marquee needed almost nothing (its source i
 a required 2.5:1); the small tile is a tighter crop of a source that carried a lot of empty space.
 A designer pass would still beat a mechanical crop, particularly for the small tile where the
 feature list is close to its readable limit.
+
+The Edge store logo is the master fitted to 300x300 on a transparent canvas
+(`convert masters/logo-source-497px.png -resize 300x300 -background none -gravity center -extent
+300x300 -strip edge-store-logo-300x300.png`), so it is the same artwork as the packaged icon at a
+size the Edge listing accepts.
