@@ -46,6 +46,7 @@ Table name: **docs-by-question**
 | Logging | [utils/logger.ts](utils/logger.ts) | ADR-009, RUNBOOK, SECURITY data rule 4 |
 | Review prompt policy | [utils/rating.ts](utils/rating.ts), [components/RatingPrompt.tsx](components/RatingPrompt.tsx) | ADR-015, ROADMAP R-47 |
 | Support mail composition | [utils/support.ts](utils/support.ts), [components/options/SupportSection.tsx](components/options/SupportSection.tsx) | ADR-017, ROADMAP R-46 |
+| What a page did with a rule, and how the editor says it | [utils/applyReport.ts](utils/applyReport.ts), [utils/iconProbe.ts](utils/iconProbe.ts) | ADR-019, ROADMAP R-61, LIMITATIONS L-36/L-37 |
 | Build | [vite.config.ts](vite.config.ts), [vite.content.config.ts](vite.content.config.ts) | ARCHITECTURE §2, ADR-006 |
 | Manifest, permissions, CSP | [public/manifest.json](public/manifest.json) | SECURITY |
 | Types and tuning constants | [types.ts](types.ts), [constants.ts](constants.ts) | DOMAIN §1 |

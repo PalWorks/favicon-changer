@@ -22,8 +22,8 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 55 | Shipped and verified, latest 2026-09-07 in v1.4.3, including the 11 findings of the pre-release audit |
-| Next up | 0 | Nothing queued. v1.4.3 is audited and packaged, waiting on a Chrome Web Store upload |
+| Done | 57 | Shipped and verified, latest 2026-09-07: the 11 findings of the pre-release audit, then R-61 and R-62 |
+| Next up | 1 | R-63 only, and it needs a decision rather than a keyboard. Everything else built is verified and packaged |
 | Paused | 4 | R-22, R-23, R-24 and R-39, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
@@ -95,14 +95,21 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-60 | Documentation described behaviour the code no longer had | S | (2026-09-07) Four stale claims corrected, including a DOMAIN invariant that named the wrong mechanism and a resolution order missing the `prefix` tier |
 | R-15 | Extract the editor's logic into a hook | M | (2026-09-07) 771 lines down to 213 of markup over a hook and a pure reducer. An unedited pattern is now derived, not stored (ADR-016), which removed two pieces of state, one effect, and a corruption bug in "Edit that rule instead" reproduced in a real browser against both builds. 52 new tests |
 | R-49 | A junk domain rule could be saved | S | (2026-09-07) Chrome percent-encodes illegal host characters where Node throws, so "not a url at all" saved a rule that could match nothing. Hostname shape is checked now, and `localhost:3000` reads as a host and port rather than a scheme |
+| R-61 | "Favicon updated successfully!" was claimed, never verified | M | (2026-09-07) The message was printed when the storage write resolved. Four cases ended with a green tick and no visible change, one of which no reload could fix. The page now reports what it did and the status line says only that. 64 unit tests, 25 of 25 mutants killed, and 28 live checks in a real Chrome (ADR-019) |
+| R-62 | A long matcher filled the whole popup | S | (2026-09-07) The conflict warning quoted the winning rule's matcher inline with `break-all`. A real Facebook auth URL wrapped to 25 lines at popup width and pushed "Edit that rule instead" a screen below the fold, so the warning stated the problem and hid the fix. One line now, 15px instead of 375px, with the full value on hover and behind a toggle |
 
 Table name: **roadmap-done**
 
 ### Next up
 
-**Empty, deliberately.** v1.4.3 is audited, packaged and waiting on a Chrome Web Store upload,
-which is the user's action and not a code task. Everything still open is either paused by decision
-(table **roadmap-paused**) or a standing decision not to act.
+| ID | Item | Effort | State |
+|---|---|---|---|
+| R-63 | Say something useful about an `http:` icon address | S | Raised 2026-09-07 by R-61. Needs a decision, not a keyboard: see the detail below and [L-37](docs/LIMITATIONS.md) |
+
+Table name: **roadmap-next**
+
+Nothing else is queued. Everything built is verified and packaged; everything still open is either
+paused by decision (table **roadmap-paused**) or a standing decision not to act.
 
 **How the queue got here.** 1.4.0 brought prefix matching, a regex UI, specificity-based
 precedence, hardened import, correctly sized store assets, a third smaller package and the Tier 2
@@ -1163,6 +1170,88 @@ support@palworks.ai, published in [docs/SECURITY.md](docs/SECURITY.md) and in th
 with the reporting expectations written down: private report first, extension version and browser
 build, acknowledgement within three working days, no bug bounty. The store review queue is still
 the floor on how fast a fix can reach installed copies, which the section says plainly.
+
+### R-61 · "Favicon updated successfully!" was claimed, never verified · **M** · ✅ done 2026-09-07
+The message was printed the moment `chrome.storage.local.set` resolved. That proves the rule was
+stored and nothing else. `saveRule` called `notifyTabs()` **without awaiting it**, `notifyTabs`
+called `sendMessageToTab` which returns `Promise<void>`, and `sendMessageToTab` awaited the
+content script's reply and **discarded** it. The content script did reply `{ok: true}`. The honest
+answer was one message hop away and was being thrown on the floor.
+
+Four cases ended with a green tick and no visible change:
+
+1. **An excluded site.** The worst of the four and a defect rather than a limitation: no reload
+   ever helps, and the rule sits in the rules list while the site sits in the excluded list, on a
+   different page. Nothing anywhere warned.
+2. **A pasted image address that does not load.** Checked for shape, never for existence.
+3. **A tab with no live content script**, which is every tab open across an extension update.
+4. **A rule shadowed by a more specific one.** The pre-save conflict banner covers most of this,
+   but it is advisory and the user can save over it.
+
+**What was built.** The reply now carries an `ApplyReport` (`applied` / `fallback` / `excluded` /
+`none` / `unavailable`, plus the winning rule's id and whether the DOM write happened), the editor
+asks the one tab the rule targets and reads it, and `describeSaveOutcome` turns that into the line
+the user sees. The branching that decides what to do moved out of `content.ts` into
+`decideApply()`, so the action taken and the status reported come from **one** decision rather
+than two copies that can disagree. An excluded site's warning carries a "Remove from excluded"
+button, and pressing it re-checks rather than declaring victory. Design and consequences in
+[ADR-019](docs/DECISIONS.md).
+
+**What it deliberately does not claim.** Nothing in an extension can see the tab strip repaint.
+`chrome.tabs.faviconUrl` looks like the verifier and Chrome omits it whenever the tab icon is a
+`data:` URL, which is the normal case here (proved while writing [TESTING.md](docs/TESTING.md)'s
+signal table). So "updated" rests on "a rule matched and the write happened", and no more is
+implied.
+
+**Verification.** 64 new unit tests, and 25 hand-written mutations of the new logic, all 25 killed
+(the two that survived a first pass were both unobservable code, which was then removed rather than
+tested around: a redundant `data:` guard and a `settled` latch). Then 28 checks in a real Chrome
+over the DevTools protocol, driving the actual editor: confirmed, not-open, excluded, the fix
+button, shadowed, a dead `https:` address, a live one, and a discarded tab. Four of those are on
+the popup surface rather than the settings page, because `mode` and `context` differ there and the
+popup is where most saves happen. Every pre-existing
+suite was re-run against the refactored `content.ts` and the new editor: the favicon write path
+(9), signals (4), exclusion (8), options (8), editor (10), import (6), popup (12), export (5) and
+surface health (5), all passing. Three of the four failures in the first live run were the
+harness's, and are now in **testing-harness-traps**; the fourth was real and is below. L-36 was reproduced on purpose by swapping
+`dist/content.js` for the one shipped in 1.4.3.
+
+**One defect in this work, found only by running it.** The icon probe was written to run in the
+editor page, and an extension page cannot load an insecure subresource under MV3, so probing an
+`http:` address returned "broken" for a working image. It would have shipped a confident warning
+about a working address, which is the exact failure this item exists to remove. `http:` is now not
+probed at all and gets no claim either way. Recorded as [L-37](docs/LIMITATIONS.md), with R-63 for
+what could be said instead.
+
+### R-62 · A long matcher filled the whole popup · **S** · ✅ done 2026-09-07
+Reported from a live Facebook auth page with two screenshots. The conflict warning quoted the
+winning rule's matcher inline, with `break-all`, so a rule made for a login or OAuth URL wrapped
+to dozens of lines: the banner filled the entire 400px popup and pushed "Edit that rule instead" a
+full screen below the fold. The warning stated the problem and hid the fix.
+
+Measured in the product, at the popup's usable content width, with a matcher of the reported shape
+and length (about 1,300 characters): **25 lines and 375px before, 1 line and 15px after**, with
+the whole banner at 148px and the button on the first screen. The full value is still on hover
+(`title`) and behind a "Show the full pattern" toggle, which expands to 403px only when asked, so
+nothing is hidden. `shortenPattern()` is pure and tested, display only, and never used for
+matching. The same 10 measurements also cover the toggle round trip.
+
+Two smaller things went with it, since the markup was open: the warning triangle emoji became an
+inline SVG (as the support section already did), and the sentence was reworded to stop putting an
+article in front of a scope name, which rendered as "a Entire Domain rule".
+
+### R-63 · Say something useful about an `http:` icon address · **S** · needs a decision
+Raised by R-61 and described as [L-37](docs/LIMITATIONS.md). Two facts are true of a rule whose
+icon is a plain `http:` URL, and the product currently says neither: it cannot be probed from an
+extension page (so no warning is possible), and on an `https:` page it is mixed content, which
+Chrome upgrades and then blocks when the upgrade fails.
+
+**Options.** (a) Leave it: an `http:` icon works on `http:` pages, and the case is narrow, an
+intranet or a local dev server. (b) A distinct message at save time, not a probe result: "that
+address is http, so it may not load on secure pages", which needs its own verification of Chrome's
+mixed-content handling before it can be stated as fact. (c) Refuse `http:` in
+`isAllowedFaviconUrl`, which would break existing rules and existing imports and is out of
+proportion. **Recommendation: (b), or (a) if nobody reports it.** Not (c).
 
 ---
 

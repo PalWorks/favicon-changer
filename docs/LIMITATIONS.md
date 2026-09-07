@@ -292,3 +292,37 @@ of the parsed hostname is checked (`looksLikeHostname`), and the same audit foun
 problem: `scheme:` was accepted as a scheme, so `localhost:3000/app` produced the prefix
 suggestion `localhost:///3000`.
 
+### L-36 · A save cannot be confirmed in a tab left over from the previous version · *open, inherent*
+The save confirmation reads the content script's reply (ADR-019). A tab that was open across an
+extension update is still running the **previous** release's `content.js`, which answers
+`RulesUpdated` with `{ok: true}`. That is not a report and cannot say whether the rule was
+excluded or shadowed, so `isApplyReport()` treats it as no answer and the user is told "did not
+confirm the change. Reload it to see the new icon."
+
+In that specific case the old script did apply the icon, so the advice is unnecessary. Verified
+by replacing `dist/content.js` with the one shipped in 1.4.3 and saving a rule: the message is the
+unconfirmed one and the icon on the page changed anyway. Chosen deliberately: a conservative
+message that costs one needless reload beats a confirmation that was never received. It affects
+only tabs open at the moment of an update, and only until they are reloaded, which is the same
+window as [L-34](#l-34--background-tabs-keep-their-old-icon-across-an-extension-update--open-inherent).
+
+### L-37 · An `http:` icon address is never checked, and will not load on a secure page · *open*
+Two facts about a rule whose icon is a plain `http:` URL, neither of which the product says out
+loud yet:
+
+1. **It is not probed.** `probeIconUrl` only tries `https:`. An extension page cannot load an
+   insecure subresource under Manifest V3, so an `http:` address fires `onerror` whatever is at
+   the other end. Measured from the options page: `http://127.0.0.1:8899/blue.png` and
+   `http://localhost:8899/blue.png` both error while an `https:` image of the same size loads, and
+   a genuine `https:` 404 errors correctly. Probing http would therefore warn confidently about a
+   working address, which is the failure ADR-019 exists to remove.
+2. **On an `https:` page it is mixed content.** Chrome upgrades an optionally-blockable
+   mixed-content image to https and blocks it when the upgrade fails, so an `http:` icon works on
+   an `http:` page and usually does not on a secure one. `isAllowedFaviconUrl` accepts both
+   schemes and PRIVACY_POLICY.md's case 1 describes both, so this is allowed and undocumented in
+   the UI rather than prevented.
+
+The fix, if it is worth one, is a distinct message at save time for an `http:` address rather than
+a probe result: "that address is http, so it may not load on secure pages." Not built, because
+saying it accurately needs its own verification and the case is narrow (an intranet or a local dev
+server). Raised as ROADMAP R-63.

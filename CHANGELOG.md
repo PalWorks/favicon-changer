@@ -10,6 +10,19 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+### Changed
+- **The save confirmation now tells you the truth.** "Favicon updated successfully!" used to
+  appear as soon as the rule was stored, whether or not anything on screen changed. It is now
+  shown only when the page confirms it applied that rule. When it did not, you are told why:
+  the site is on your excluded list (with a button to take it off), another more specific rule
+  wins on that page, the image address does not load, you have no matching tab open, or the page
+  needs a reload.
+- **A long rule pattern no longer fills the popup.** When the extension warns that another rule
+  already wins on a page, it quotes that rule's pattern on one line instead of in full. A rule
+  made for a login or sign-in URL used to wrap to dozens of lines and push the "Edit that rule
+  instead" button off the bottom of the popup. The whole pattern is still there on hover and
+  behind "Show the full pattern".
+
 ---
 
 ## [1.4.3]: 2026-09-07

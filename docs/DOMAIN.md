@@ -187,6 +187,8 @@ Things that must stay true. Breaking one of these is a bug even if tests pass.
    `scoreRule`; do not add a second path that bypasses it.
 8. **Nothing leaves the device** except a fetch of a URL the user typed, the current site's own
    icon, and the options-page preview call to Google's favicon service. All three are documented
-   in [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md); adding a fourth means amending that file.
+   in [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md); adding a fourth means amending that file. The
+   first of the three happens on every apply *and* once when such a rule is saved, so the editor
+   can say whether the address loads (ADR-019); same address, same request, no new destination.
 9. **Stored icons stay small.** Uploads are capped at 128px and compressed, because
    `chrome.storage.local` has a hard quota and there is no `unlimitedStorage` permission.

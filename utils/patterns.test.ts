@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { escapeRegex, hasExplicitScheme, hostnameFromInput, looksLikeHostname, suggestPrefix, suggestRegex } from './patterns';
+import { escapeRegex, hasExplicitScheme, hostnameFromInput, looksLikeHostname, shortenPattern, suggestPrefix, suggestRegex } from './patterns';
+import { PATTERN_DISPLAY_MAX } from '../constants';
 
 const SHEET = 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0';
 
@@ -177,3 +178,47 @@ describe('hostnameFromInput reads a host:port the way a developer means it', () 
   });
 });
 
+// The conflict warning quotes the winning rule's matcher. A rule made for a
+// login or OAuth page is a URL with hundreds of characters of query string, and
+// quoting one in full filled the whole popup and pushed the fix out of sight
+// (R-62). Display only: nothing matches on the result.
+describe('shortenPattern', () => {
+  it('leaves a matcher that already fits completely alone', () => {
+    expect(shortenPattern('example.com')).toBe('example.com');
+    expect(shortenPattern('https://docs.google.com/')).toBe('https://docs.google.com/');
+  });
+
+  it('leaves a matcher of exactly the limit alone', () => {
+    const exact = 'a'.repeat(PATTERN_DISPLAY_MAX);
+    expect(shortenPattern(exact)).toBe(exact);
+  });
+
+  it('shortens the real URL that caused this, keeping the identifying start', () => {
+    const facebook = 'https://www.facebook.com/auth_platform/afad/?apc=AdoCEW7qLAMU5hZFdT8nshs1DwhTt5Hq0oSusBmI3b74ciSXFiSb0AqdGyXotK6FZhyZdzLTiLheILAHO4LEX0Bw9NkfZDWiaJIYFqXG5RHoL1Oh6K6aBcNSZdckmLTHmllXIKueaLc';
+    const short = shortenPattern(facebook);
+    expect(short.length).toBe(PATTERN_DISPLAY_MAX);
+    expect(short.startsWith('https://www.facebook.com/auth_platform/afad')).toBe(true);
+    expect(short.endsWith('\u2026')).toBe(true);
+  });
+
+  it('never returns more than the limit, whatever the input length', () => {
+    [49, 100, 2000].forEach(length => {
+      expect(shortenPattern('x'.repeat(length)).length).toBe(PATTERN_DISPLAY_MAX);
+    });
+  });
+
+  it('honours an explicit limit', () => {
+    expect(shortenPattern('abcdefghij', 5)).toBe('abcd\u2026');
+  });
+
+  it('does not try to shorten below a single character', () => {
+    // Guards the arithmetic rather than the appearance: max - 1 must not be
+    // able to produce a negative slice.
+    expect(shortenPattern('abcdefghij', 1)).toBe('abcdefghij');
+    expect(shortenPattern('abcdefghij', 0)).toBe('abcdefghij');
+  });
+
+  it('trims surrounding whitespace, which would otherwise be spent on the budget', () => {
+    expect(shortenPattern('  example.com  ')).toBe('example.com');
+  });
+});

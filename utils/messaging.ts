@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { APPLY_REPORT_TIMEOUT_MS } from '../constants';
 
 /**
  * Checks if a URL is restricted (chrome://, about:, edge://, view-source:, chrome web store).
@@ -108,5 +109,58 @@ export const sendMessageToTab = async (tabId: number, message: any, options: { i
             // Ordinary: no content script listening in that tab yet.
             logger.debug('No content script in tab, it will pick up rules on next load:', tabId);
         }
+    }
+};
+
+/**
+ * Sends a message to a tab and returns what the content script replied.
+ *
+ * The counterpart to sendMessageToTab, which returns nothing: this exists
+ * because a save used to be reported as successful without anybody ever
+ * reading the reply that says whether it was. See docs/DECISIONS.md ADR-019.
+ *
+ * Null means "no answer", never "it failed to apply". A tab whose content
+ * script is missing, a restricted page, a tab that is closing, and a reply that
+ * takes longer than the budget all land here, and the caller must present them
+ * as unconfirmed rather than as broken.
+ *
+ * The timeout is not belt and braces. `ensureContentScriptReady` can spend most
+ * of a second pinging and injecting, and the caller is a save button the user is
+ * waiting on, so the wait has to be bounded by us rather than by the browser.
+ */
+export const requestFromTab = async <T>(
+    tabId: number,
+    message: any,
+    options: { inject?: boolean; timeoutMs?: number } = {},
+): Promise<T | null> => {
+    const { inject = true, timeoutMs = APPLY_REPORT_TIMEOUT_MS } = options;
+
+    const ask = async (): Promise<T | null> => {
+        try {
+            if (inject) {
+                const isReady = await ensureContentScriptReady(tabId);
+                if (!isReady) return null;
+            }
+            const reply = await chrome.tabs.sendMessage(tabId, message);
+            return (reply ?? null) as T | null;
+        } catch (e) {
+            // Ordinary: nothing listening in that tab.
+            logger.debug(`[Messaging] No reply from tab ${tabId}`, e);
+            return null;
+        }
+    };
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const expiry = new Promise<null>(resolve => {
+        timer = setTimeout(() => {
+            logger.debug('[Messaging] Gave up waiting for tab', tabId);
+            resolve(null);
+        }, timeoutMs);
+    });
+
+    try {
+        return await Promise.race([ask(), expiry]);
+    } finally {
+        if (timer !== null) clearTimeout(timer);
     }
 };

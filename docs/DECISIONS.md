@@ -477,3 +477,58 @@ submissions step by step with the listing copy drafted. Restarting one is pickin
 writing it. The trigger for R-22 is an install breakdown showing a language worth serving *and*
 someone who can verify it; for R-23, a reason to want the second channel; for R-24, a user asking
 for continuous sync rather than a manual export.
+
+---
+
+## ADR-019: Report what the page did, rather than what the storage write did
+**Status**: Accepted · 2026-09-07
+
+**Decision.** A save is reported on evidence from the page, not on the storage write resolving.
+The content script's reply to `RulesUpdated` now carries an `ApplyReport` saying what it did, the
+editor reads that reply for the one tab the rule targets, and the status line says only what is
+known. "Favicon updated successfully!" is shown when a page confirms it applied **that** rule and
+never otherwise. Everything else is an amber warning that names the reason.
+
+**Why.** The message was printed as soon as `chrome.storage.local.set` resolved, which proves only
+that the rule was stored. Four cases ended with a green tick and no visible change:
+
+1. **The site is on the exclusion list.** The content script returns before applying, and nothing
+   warned at save time. No reload would ever help, and there was no signal at all. This one is a
+   defect, not a limitation.
+2. **A pasted image address that does not load.** Validated for shape, never for existence.
+3. **A tab with no live content script**, including every tab open across an extension update.
+4. **A rule shadowed by a more specific one.** The pre-save conflict banner covers most of this,
+   but it is advisory and the user can save anyway.
+
+The reply already existed. `content.ts` answered `{ok: true}`, `sendMessageToTab` awaited it and
+**threw it away**, and `notifyTabs()` was not awaited at all. So the honest answer was one message
+hop away and was being discarded.
+
+**What it does not claim.** Nothing here can see the tab strip repaint; `chrome.tabs.faviconUrl`
+looks like the verifier and is omitted by Chrome whenever the tab icon is a `data:` URL, which is
+the normal case. So the strongest available fact is "a rule matched and the DOM write happened",
+and the copy says "updated" on the strength of that and no more.
+
+**Consequences, stated so nothing is quietly assumed.**
+
+- A save takes up to about 1.2s longer in the worst case (a tab with no content script, where
+  `ensureContentScriptReady` pings and injects). The common case adds a few milliseconds. The
+  Apply button stays in its loading state throughout, and the wait is bounded here rather than by
+  the browser (`APPLY_REPORT_TIMEOUT_MS`).
+- One extra `RulesUpdated` message to one tab per save, on top of the existing broadcast.
+  `notifyTabs` is deliberately left alone: its fan-out policy is the one part of this with a
+  measured cost (L-14, L-34) and it is the reliable path. `applyRule()` is idempotent, since
+  `updateFavicon` skips a write whose href is already correct, so the extra message can change
+  timing and never outcome.
+- An `https:` icon address is fetched once at save time to see whether it loads. This is the same
+  fetch the rule performs on every apply, to the same address the user typed, and it is disclosed
+  as case 1 of [PRIVACY_POLICY.md](../PRIVACY_POLICY.md). An `http:` address is not probed at all:
+  an extension page cannot load an insecure subresource under MV3, so the answer would always be
+  "broken" whatever is there. See L-37.
+- A tab still running the previous release's content script replies `{ok: true}`, which is not a
+  report. That reads as unconfirmed, so the user is told to reload a page whose icon may already
+  have changed. Deliberate: a conservative message beats a confirmation we did not receive. L-36.
+
+**If reversed.** The four cases above go back to reporting success. The exclusion case in
+particular is the one that cannot be diagnosed by the user: the rule is in the list, the site is
+in the excluded list, and the two facts sit on different pages.

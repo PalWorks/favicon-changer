@@ -4,6 +4,7 @@ import {
     OpenTab,
     consumePendingEditorTarget,
     deleteRule,
+    findTabForRule,
     generateId,
     getCurrentTabInfo,
     getOpenTabs,
@@ -11,8 +12,12 @@ import {
     isAllowedFileSchemeAccess,
     importRulesFromJson,
     openExpandedEditor,
+    requestApplyReport,
     saveRule,
+    saveSettings,
 } from '../../utils/storage';
+import { SaveOutcome, SaveVerification, describeSaveOutcome } from '../../utils/applyReport';
+import { probeIconUrl } from '../../utils/iconProbe';
 import { logger } from '../../utils/logger';
 import { findConflictingRule, patternMatches } from '../../utils/matcher';
 import { popupClosesOnFileDialog } from '../../utils/platform';
@@ -60,8 +65,13 @@ export interface UseRuleEditorArgs {
 export type EditorSection = 'upload' | 'emoji' | 'badge';
 
 export interface StatusMessage {
-    type: 'success' | 'error';
+    // 'warning' is for a save that landed in storage without producing the
+    // visible change the user was expecting. It is not an error, and calling it
+    // one would be as wrong as the green tick this replaced.
+    type: 'success' | 'warning' | 'error';
     text: string;
+    /** Offered when the message names something the user can fix in one click. */
+    action?: { label: string; run: () => void };
 }
 
 export interface PatternPreview {
@@ -260,7 +270,13 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
 
     const flashStatus = (message: StatusMessage, ms: number) => {
         setStatusMessage(message);
-        if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
+        if (statusTimer.current !== null) {
+            window.clearTimeout(statusTimer.current);
+            statusTimer.current = null;
+        }
+        // ms <= 0 means leave it up. Anything the user has to read and act on,
+        // or a button they have to press, must not time out from under them.
+        if (ms <= 0) return;
         statusTimer.current = window.setTimeout(() => {
             statusTimer.current = null;
             setStatusMessage(null);
@@ -270,6 +286,101 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
     useEffect(() => () => {
         if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
     }, []);
+
+    // --- Did the save actually change anything? ------------------------------
+    //
+    // "Favicon updated successfully!" used to be printed as soon as
+    // chrome.storage.local.set resolved, which proved only that the rule was
+    // stored. Four cases ended with a green tick and no visible change: an
+    // excluded site, a tab with no live content script, an image address that
+    // does not load, and a rule shadowed by a more specific one. The content
+    // script already replied to RulesUpdated and the reply was discarded. Now
+    // it carries what the page did, and this is where it is read.
+    // See docs/DECISIONS.md ADR-019 and ROADMAP R-61.
+
+    // The rule the last save wrote, so a fix offered in the status line can
+    // re-check that same rule instead of guessing at one.
+    const lastSave = useRef<FaviconRule | null>(null);
+
+    const verifySave = async (rule: FaviconRule): Promise<SaveVerification> => {
+        // Both are independent of each other, and the icon probe is a network
+        // round trip, so they overlap rather than queue.
+        const [iconLoaded, tab] = await Promise.all([
+            probeIconUrl(rule.faviconUrl),
+            findTabForRule(rule.matchType, rule.matcher),
+        ]);
+
+        if (!tab) {
+            return {
+                savedRuleId: rule.id,
+                targetLabel: targetDomain || '',
+                checkedTab: false,
+                report: null,
+                iconLoaded,
+            };
+        }
+
+        return {
+            savedRuleId: rule.id,
+            targetLabel: tab.hostname,
+            checkedTab: true,
+            report: await requestApplyReport(tab.id),
+            iconLoaded,
+        };
+    };
+
+    const showOutcome = (outcome: SaveOutcome) => {
+        const message: StatusMessage = { type: outcome.tone, text: outcome.text };
+
+        if (outcome.fix?.kind === 'unexclude') {
+            const domain = outcome.fix.domain;
+            message.action = { label: 'Remove from excluded', run: () => { void removeExclusion(domain); } };
+        }
+
+        // A confirmation can time out. A warning cannot: it is the only place
+        // the user is told the thing they asked for has not happened yet, and
+        // some of them carry a button.
+        flashStatus(message, outcome.tone === 'success' ? 2000 : 0);
+    };
+
+    /** The one-click fix offered when a saved rule's site turns out to be excluded. */
+    const removeExclusion = async (domain: string) => {
+        try {
+            const { settings } = await getStorageData();
+            const remaining = (settings.excludedDomains || []).filter(d => d !== domain);
+            await saveSettings({ ...settings, excludedDomains: remaining });
+            logger.info('Removed exclusion offered by the save warning', { domain });
+
+            // Check again rather than declaring victory. The rule may also be
+            // shadowed, and one more surprise after a fix is worse than none.
+            const rule = lastSave.current;
+            if (rule) {
+                showOutcome(describeSaveOutcome(await verifySave(rule)));
+            } else {
+                flashStatus({ type: 'success', text: `${domain} is no longer excluded.` }, 2000);
+            }
+        } catch (e) {
+            logger.error('Failed to remove the exclusion', e);
+            setStatusMessage({ type: 'error', text: 'Could not update the excluded list.' });
+        }
+    };
+
+    const verifyAndReport = async (rule: FaviconRule) => {
+        lastSave.current = rule;
+        try {
+            showOutcome(describeSaveOutcome(await verifySave(rule)));
+        } catch (e) {
+            // The rule is saved whatever happened here, so this must never be
+            // reported as a failed save. Fall back to the honest answer.
+            logger.error('Could not verify the save', e);
+            showOutcome(describeSaveOutcome({
+                savedRuleId: rule.id,
+                targetLabel: '',
+                checkedTab: true,
+                report: null,
+            }));
+        }
+    };
 
     /**
      * Re-targets the editor at the rule that would win, so the user can edit
@@ -361,7 +472,7 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
             await refreshData();
             if (onRuleSaved) onRuleSaved();
 
-            flashStatus({ type: 'success', text: 'Favicon updated successfully!' }, 2000);
+            await verifyAndReport(newRule);
         } catch (error: any) {
             logger.error('Failed to save rule', error);
             const isQuota = error?.message?.toLowerCase().includes('quota');

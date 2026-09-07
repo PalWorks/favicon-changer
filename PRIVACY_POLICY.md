@@ -1,6 +1,6 @@
 # Privacy Policy for Favicon Changer Ultimate
 
-**Last Updated: September 2, 2026**
+**Last Updated: September 7, 2026**
 
 ## Introduction
 Favicon Changer Ultimate ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how our browser extension handles your information.
@@ -27,7 +27,7 @@ Favicon Changer Ultimate ("we", "our", or "us") is committed to protecting your 
 ## Network Requests
 The extension makes no network requests of its own accord. There are exactly three cases in which your browser fetches something on the extension's behalf, all of them a direct result of something you did:
 
-1. **A favicon image URL you entered.** If you set a favicon from an image URL (the "paste image URL" source, or the global fallback favicon setting), your browser fetches that image from the address you typed, every time the rule is applied. The request goes only to that address.
+1. **A favicon image URL you entered.** If you set a favicon from an image URL (the "paste image URL" source, or the global fallback favicon setting), your browser fetches that image from the address you typed, every time the rule is applied. It also fetches it once when you save such a rule, so the extension can tell you straight away if the address does not load. Both requests go only to that address, and only if the address begins with `https://`.
 2. **The current page's own favicon.** When you use the Badge & Overlay tools, or export the original favicon, the extension fetches the favicon of the page you are on from that same site, so it can draw your badge on top of it. This request goes only to the site you are already visiting.
 3. **Google's public favicon service, on the settings page only.** When you type a URL or domain into the rule editor on the extension's settings (options) page, the extension requests a preview icon for that domain from Google's public favicon endpoint (`https://www.google.com/s2/favicons?domain=<domain>`). This is done so the editor can show you which site you are about to configure.
    - **What is sent:** only the domain name you typed into that field, plus whatever your browser normally sends with an image request (such as your IP address and user agent). No rules, settings, page contents, browsing history, or personal data are included.

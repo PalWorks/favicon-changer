@@ -39,6 +39,24 @@ interface FaviconEditorProps {
     onRuleSaved?: () => void;
 }
 
+// Status banner styling, keyed by tone. An SVG rather than an emoji, so the
+// glyph is the same on every platform and a screen reader reads the message
+// rather than the name of a picture (the icon is aria-hidden; the text carries
+// the meaning). Amber is the tone this file gained with R-61: a save that
+// landed in storage without producing a visible change is neither a success
+// nor an error.
+const STATUS_TONE: Record<'success' | 'warning' | 'error', string> = {
+    success: 'bg-green-50 text-green-700 border-green-200',
+    warning: 'bg-amber-50 text-amber-800 border-amber-200',
+    error: 'bg-red-50 text-red-700 border-red-200',
+};
+
+const STATUS_ICON: Record<'success' | 'warning' | 'error', string> = {
+    success: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+    warning: 'M12 9v2m0 4h.01M5.072 19h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+    error: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+};
+
 export const FaviconEditor: React.FC<FaviconEditorProps> = ({
     mode, context = 'action', initialRule, onRuleSaved,
 }) => {
@@ -71,11 +89,23 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({
                     {statusMessage && (
                         <div
                             role="status"
-                            aria-live={statusMessage.type === 'error' ? 'assertive' : 'polite'}
-                            className={`sticky top-0 z-20 p-3 rounded-lg text-xs font-medium flex items-center gap-2 shadow-md mb-2 ${statusMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+                            aria-live={statusMessage.type === 'success' ? 'polite' : 'assertive'}
+                            className={`sticky top-0 z-20 p-3 rounded-lg text-xs font-medium flex items-start gap-2 shadow-md mb-2 border ${STATUS_TONE[statusMessage.type]}`}
                         >
-                            <span>{statusMessage.type === 'success' ? '✅' : '⚠️'}</span>
-                            {statusMessage.text}
+                            <svg className="w-4 h-4 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={STATUS_ICON[statusMessage.type]} />
+                            </svg>
+                            <div className="min-w-0 flex-1">
+                                <span>{statusMessage.text}</span>
+                                {statusMessage.action && (
+                                    <button
+                                        onClick={statusMessage.action.run}
+                                        className="block mt-2 px-2 py-1 bg-white border border-current rounded text-[10px] font-bold uppercase tracking-wide hover:opacity-80"
+                                    >
+                                        {statusMessage.action.label}
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     )}
 

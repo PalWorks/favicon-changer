@@ -1,3 +1,5 @@
+import { PATTERN_DISPLAY_MAX } from '../constants';
+
 /**
  * Helpers for turning a URL into a matcher pattern the user can accept as-is.
  *
@@ -105,4 +107,25 @@ export const hostnameFromInput = (value: string): string => {
     } catch (e) {
         return '';
     }
+};
+
+/**
+ * A matcher cut down to something that can sit inside a sentence.
+ *
+ * Display only: never store, compare or match on the result. A rule's matcher
+ * is legitimately as long as a URL, and the OAuth and login URLs people
+ * actually make rules for carry hundreds of characters of query string. Quoted
+ * in full inside the conflict warning, one of those filled the whole popup and
+ * pushed "Edit that rule instead" a screen below the fold, so the warning
+ * explained the problem and hid the fix. ROADMAP R-62.
+ *
+ * A plain cut from the front, rather than anything cleverer: the identifying
+ * part of both a URL and an anchored regex is its start, and a predictable rule
+ * is worth more here than a tidier ellipsis. The caller keeps the full value in
+ * a tooltip and behind a toggle, so nothing is actually hidden.
+ */
+export const shortenPattern = (value: string, max: number = PATTERN_DISPLAY_MAX): string => {
+    const trimmed = value.trim();
+    if (max <= 1 || trimmed.length <= max) return trimmed;
+    return `${trimmed.slice(0, max - 1)}\u2026`;
 };

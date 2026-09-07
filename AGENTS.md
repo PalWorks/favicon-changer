@@ -5,9 +5,11 @@ before your first edit. Human contributors should read it too, the constraints a
 agent-specific, they are just written down here.
 
 **What this repo is**: a Chrome Manifest V3 extension that replaces site favicons from
-user-defined rules. ~2,500 lines of TypeScript/React, no backend, 983 live users on the Chrome
-Web Store. Shipping a regression is visible to strangers within a day and cannot be rolled back
-quickly ([docs/PLAYBOOK.md](docs/PLAYBOOK.md) §7).
+user-defined rules. About 4,400 lines of TypeScript and React, counting neither tests, comments,
+nor the 693-entry emoji catalogue in `constants.ts` (7,200 lines counted plainly, 10,100 with the
+tests). No backend, 1,000 live users on the Chrome Web Store. Shipping a regression is visible to
+strangers within a day and cannot be rolled back quickly
+([docs/PLAYBOOK.md](docs/PLAYBOOK.md) §7).
 
 ---
 
@@ -110,13 +112,17 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
   while the tab strip still shows the site's. Check the tab's `faviconUrl` over the DevTools
   protocol, and for anything load-bearing, screenshot the window. ADR-001, ADR-014,
   [docs/TESTING.md](docs/TESTING.md).
+- **Never tell the user something happened without evidence that it did.** A storage write
+  resolving is not a favicon changing, and a message that overstates it cannot be debugged by the
+  person reading it. ADR-019 is the shape to follow: ask the context that knows, treat silence as
+  silence, and name the reason when the answer is no.
 
 ---
 
 ## 5. Definition of done
 
 ```bash
-npm run check         # typecheck + 302 tests, both must pass; add tests for logic you added
+npm run check         # typecheck + 366 tests, both must pass; add tests for logic you added
 npm run build         # must produce dist/ with both passes
 ```
 

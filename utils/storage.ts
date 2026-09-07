@@ -1,8 +1,9 @@
-import { FaviconRule, GlobalSettings, StorageData, TabInfo } from '../types';
+import { FaviconRule, GlobalSettings, MatchType, StorageData, TabInfo } from '../types';
 import { validateImportedRules, RejectedRule } from './importRules';
 import { IS_DEV } from '../constants';
 import { logger } from './logger';
-import { sendMessageToTab, isRestrictedUrl } from './messaging';
+import { sendMessageToTab, isRestrictedUrl, requestFromTab } from './messaging';
+import { ApplyReport, TabCandidate, isApplyReport, pickTargetTab } from './applyReport';
 // The handoff key and its shape are shared with the service worker, so they
 // live in their own module rather than being declared twice.
 import { PENDING_TARGET_KEY, PendingEditorTarget } from './handoff';
@@ -270,6 +271,83 @@ export const notifyTabs = () => {
     });
 
     logger.debug('[Storage] Notified tabs of rule change', { notified, skipped });
+  });
+};
+
+// --- Verifying that a save was actually applied ---
+
+/**
+ * Asks one tab to re-apply the rules and returns what it says it did.
+ *
+ * Deliberately a second message rather than a return value threaded through
+ * `notifyTabs`. The broadcast stays exactly as it is, because its fan-out
+ * policy is the one piece of this that has a measured cost (L-14, L-34) and it
+ * is the reliable path: if this confirmation request fails, the tab has still
+ * been told. `applyRule()` is idempotent (`updateFavicon` skips a write whose
+ * href is already correct), so the extra message costs one storage read in one
+ * tab and can never produce a different outcome.
+ *
+ * Null means the tab did not answer, or answered with something that is not a
+ * report. An unrecognised answer is the normal case for a tab that was open
+ * across an extension update and is still running the previous content script,
+ * which replies `{ok: true}`. See L-36.
+ */
+export const requestApplyReport = async (tabId: number): Promise<ApplyReport | null> => {
+  if (IS_DEV) return null;
+
+  const reply = await requestFromTab<unknown>(tabId, { type: 'RulesUpdated' });
+  if (!isApplyReport(reply)) {
+    if (reply) logger.debug('[Storage] Tab replied without a report', reply);
+    return null;
+  }
+  return reply;
+};
+
+/** An open tab a rule covers, plus the id needed to talk to it. */
+export interface RuleTargetTab {
+  id: number;
+  hostname: string;
+}
+
+/**
+ * The open tab a just-saved rule should be checked against, or null if the user
+ * has none open. Matching and preference live in `pickTargetTab`, which is
+ * pure and tested; this only turns Chrome's tab list into candidates.
+ */
+export const findTabForRule = async (matchType: MatchType, matcher: string): Promise<RuleTargetTab | null> => {
+  if (IS_DEV) return null;
+
+  if (!chrome.tabs || !chrome.tabs.query) return null;
+
+  return new Promise((resolve) => {
+    chrome.tabs.query({}, (tabs: any[]) => {
+      if (chrome.runtime.lastError) {
+        logger.warn('[Storage] tabs.query failed:', chrome.runtime.lastError.message);
+        resolve(null);
+        return;
+      }
+
+      const candidates: TabCandidate[] = [];
+      (tabs || []).forEach(tab => {
+        if (!tab.id || !tab.url || isRestrictedUrl(tab.url)) return;
+        let hostname = '';
+        try {
+          hostname = new URL(tab.url).hostname;
+        } catch (e) {
+          return;
+        }
+        candidates.push({
+          id: tab.id,
+          url: tab.url,
+          hostname,
+          active: !!tab.active,
+          discarded: !!tab.discarded,
+        });
+      });
+
+      const picked = pickTargetTab(candidates, matchType, matcher);
+      resolve(picked ? { id: picked.id, hostname: picked.hostname } : null);
+    });
   });
 };
 

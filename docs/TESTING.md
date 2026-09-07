@@ -184,6 +184,10 @@ Found while running the 2026-09-07 audit. Every one of these looked like a produ
 | **A blocking dialog** | `alert()` and `confirm()` freeze the page and every later `Runtime.evaluate` times out | `Page.enable`, then answer `Page.javascriptDialogOpening` with `Page.handleJavaScriptDialog`. Reading the message is also how the import summary gets asserted |
 | **The service worker target disappears** | An MV3 worker idles out, so a harness attached to it fails with `Cannot read properties of undefined` for reasons unrelated to the product | Use an extension **page** as the privileged context. Any of them has the same `chrome.storage` and `chrome.runtime` access |
 | **The badge section has two modes** | It opens in Color Overlay, where there is no badge-text field at all | Click "Notification Badge" first, then the `maxLength=3` input |
+| **A confirmation clears itself** | The success status is a 2s flash (warnings persist). Sleeping past the save and then reading the banner finds nothing, which reads as "no message was shown" | Poll for the banner on a short interval, and when a message is *already* up, poll until the text **changes** rather than until it is non-empty |
+| **Two banners share `role="status"`** | The conflict warning and the save outcome are both `role="status"`, so a harness that joins them reads the conflict banner (which is up before the save) and never waits for the outcome | Filter the conflict banner out by its heading, or address the save outcome specifically |
+| **An extension page cannot load `http:`** | Under MV3 an insecure subresource is refused, so an `<img>` probe of any `http:` address errors whatever is there. Measured: `http://127.0.0.1:8899/blue.png` errors while an `https:` image loads | Probe `https:` only, in an extension page. This one was a product defect first, found only by running it (L-37) |
+| **Chrome will not discard the active tab** | `chrome.tabs.discard` throws "Cannot discard tab with id", and discarding also **changes the tab's id** | Activate a sibling in the same window, wait for `active` to settle, then discard; re-query by URL afterwards rather than reusing the id |
 
 Table name: **testing-harness-traps**
 
@@ -201,7 +205,7 @@ What can be automated without loading the extension at all, and is worth doing f
 - `node --check dist/*.js` to catch a broken bundle, and a grep of `dist/content.js` to confirm
   it is still a self-contained IIFE with no bare `import`.
 
-Items 1 to 6 below have all been run this way against a real Chrome. Items 7 to 11 still need
+Items 1 to 7 below have all been run this way against a real Chrome. Items 8 to 12 still need
 hands: they involve the OS file dialog, drag and drop, or two extension surfaces open at once.
 
 ---
@@ -209,8 +213,8 @@ hands: they involve the OS file dialog, drag and drop, or two extension surfaces
 ## What a change must be tested against manually
 
 `npm run build`, reload unpacked, then walk this list. These are the cases that have actually
-broken before, in the order they broke. Items 1 to 6 can be driven over the DevTools protocol as
-described above; 7 to 11 cannot.
+broken before, in the order they broke. Items 1 to 7 can be driven over the DevTools protocol as
+described above; 8 to 12 cannot.
 
 1. **Active tab**, apply an emoji rule; the tab icon changes immediately.
 2. **Background tab**, apply a rule to a page in a *non-focused* tab; its icon must change
@@ -222,26 +226,36 @@ described above; 7 to 11 cannot.
    site's own icon is intact. ADR-002.
 5. **An excluded domain**, add it in options; the page must be inert even with a matching rule.
 6. **Rule deletion**, the original favicon comes back on the affected tabs.
-7. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
+7. **What the save says it did** (ADR-019). With a matching tab open, saving must report
+   "updated successfully"; with the site excluded, it must say so and offer "Remove from
+   excluded", and pressing that must re-check and then confirm; with a more specific rule
+   already winning, it must say the icon did not change; with no matching tab open, it must say
+   the rule is waiting. A dead `https:` image address must be reported, a working one must not.
+   All driveable over the DevTools protocol.
+8. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
    survives; the file must apply to the tab the popup was opened from. ADR-007.
-8. **Drag-and-drop upload in the bubble**, works on every OS with no hand-off.
-9. **An SVG favicon site** (github.com), export the original, re-upload the exported file; it
+9. **Drag-and-drop upload in the bubble**, works on every OS with no hand-off.
+10. **An SVG favicon site** (github.com), export the original, re-upload the exported file; it
    must decode rather than showing a broken image. This is what `normalizeImageDataUrl` guards.
-10. **Import/export round trip**, export, delete all rules, re-import, rules return.
-11. **Options ⇄ popup live sync**, with both open, a change in one appears in the other.
+11. **Import/export round trip**, export, delete all rules, re-import, rules return.
+12. **Options ⇄ popup live sync**, with both open, a change in one appears in the other.
 
 ---
 
 ## Gaps worth closing, highest value first
 
-1. **The messaging paths**: `ensureContentScriptReady`'s ping-then-inject-then-retry, and
-   `notifyTabs`'s decision about which tabs to touch. Both need a `chrome.tabs` stub, which
-   `storage.test.ts` already demonstrates.
+1. **The messaging paths**: `notifyTabs`'s decision about which tabs to touch still has no test.
+   `ensureContentScriptReady`'s ping-then-inject path is now partly covered, indirectly, by
+   `requestFromTab`'s tests in `messaging.test.ts`, which stub `chrome.tabs` and assert the
+   ping-then-ask order and the refusal on a restricted URL. Its retry loop and its 200ms settle
+   are still untested.
 2. **`logger.ts` batching**: that concurrent writers do not lose entries, and that `pagehide`
    flushes. Needs fake timers.
 3. **`content.ts` orchestration**: the observer debounce, the self-stopping poller, and the
    do-nothing-on-unmatched-pages guard (ADR-002). Now more approachable, since the DOM half is
-   already isolated and jsdom is available; needs `chrome` and `MutationObserver` stubs.
+   already isolated and jsdom is available; needs `chrome` and `MutationObserver` stubs. The
+   *decision* half is no longer a gap: it moved to `decideApply()` in `utils/applyReport.ts` and
+   is unit tested, which is also what makes the save report and the action agree (ADR-019).
 4. **Canvas drawing** (`drawBadge`, `drawOverlay`, `compressFaviconDataUrl`): needs a canvas
    implementation, so it is the most expensive and the least likely to regress silently.
 

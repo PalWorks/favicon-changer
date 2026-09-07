@@ -17,6 +17,29 @@ export const OBSERVER_DEBOUNCE_MS = 100;
 // MutationObserver re-arms it if the page later swaps the favicon out.
 export const MAX_STABLE_CHECKS = 5;
 
+// How long the editor waits for a tab to say what it did with a rule it just
+// saved, before reporting the save as unconfirmed. Sized to cover the slow
+// path rather than the common one: a reply from a live content script arrives
+// in single-digit milliseconds, but a tab with no content script goes through
+// ensureContentScriptReady, which is a PING plus up to three injections with a
+// 200 ms settle after each. Shorter than that and every pre-existing tab would
+// be reported as unconfirmed when it was about to answer.
+export const APPLY_REPORT_TIMEOUT_MS = 1200;
+
+// How long to wait for a pasted icon address to load before giving up on
+// deciding whether it works. Expiry means "not known", never "broken", so this
+// only has to be long enough that an ordinary host is not written off; a slow
+// one simply produces no claim either way.
+export const ICON_PROBE_TIMEOUT_MS = 1500;
+
+// How much of a rule's matcher to show when it is quoted inside a sentence.
+// A matcher can be a whole URL, and a real one on a login or OAuth page runs to
+// hundreds of characters of query string: quoting one in full filled the entire
+// 400px popup and pushed the button under it out of view (R-62). Sized to fit
+// one line of the popup at the 10px type the banners use, which is enough for
+// a host and the start of a path, the part that identifies the rule.
+export const PATTERN_DISPLAY_MAX = 48;
+
 export const EMOJI_LIBRARY: EmojiCategory[] = [
   {
     id: 'smileys',

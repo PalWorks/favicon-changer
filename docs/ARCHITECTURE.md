@@ -146,13 +146,29 @@ document_start: content.js injected (manifest declaration, <all_urls>)
 User picks emoji / uploads image / builds badge
    -> section component renders it to a 128px <canvas> (64px for emoji)
    -> canvas.toDataURL('image/png')  [+ compressFaviconDataUrl() for uploads]
-   -> FaviconEditor.handleSave() builds the FaviconRule
+   -> useRuleEditor.handleSave() builds the FaviconRule
    -> utils/storage.saveRule() -> chrome.storage.local.set({rules})
-   -> notifyTabs(): for every non-restricted tab
+   -> notifyTabs(): for every non-restricted, non-discarded tab
         -> ensureContentScriptReady(tabId)   PING; chrome.scripting.executeScript if silent
+                                             (active tab only; the rest are pinged without it)
         -> sendMessage {type:'RulesUpdated'}
    -> content script re-runs applyRule() -> href mutation -> tab repaints, no reload
    -> options page also re-renders via chrome.storage.onChanged
+```
+
+Then, and only for the status line, the editor finds out whether any of that was visible
+(ADR-019). This is a second, targeted message to one tab, not a change to the broadcast above:
+
+```
+   -> verifySave(rule), in parallel:
+        probeIconUrl(rule.faviconUrl)      https addresses only; undefined = no claim
+        findTabForRule(matchType, matcher) -> pickTargetTab(): matching, not discarded,
+                                             active preferred; null if the user has none open
+   -> requestApplyReport(tabId) -> requestFromTab {type:'RulesUpdated'}, awaited, 1.2s budget
+        -> content script replies ApplyReport { status, ruleId?, painted? }
+        -> isApplyReport() rejects anything else, including the previous release's {ok:true}
+   -> describeSaveOutcome() -> one of nine outcomes -> the status banner
+        'confirmed' is the only one that shows green, and only for THIS rule's id
 ```
 
 The favicon itself is almost always stored **inline as a `data:` URL** inside the rule, not as a
@@ -163,14 +179,20 @@ uploads are downscaled to 128 px and compressed before saving.
 
 ## 5. Message protocol
 
-Three message types, all sent to a tab's content script. There is no messaging *to* the service
+Two message types, both sent to a tab's content script. There is no messaging *to* the service
 worker, and the content script never initiates a message.
 
 | Type | Sender | Handler | Effect |
 |---|---|---|---|
 | `PING` | `utils/messaging.ensureContentScriptReady` | `content.ts` | Replies `{ok:true}` to prove the script is live |
-| `RulesUpdated` | `utils/storage.notifyTabs` | `content.ts` | Re-runs `applyRule()` |
+| `RulesUpdated` | `utils/storage.notifyTabs` (broadcast, reply ignored) and `requestApplyReport` (one tab, reply read) | `content.ts` | Re-runs `applyRule()` and replies with an `ApplyReport` |
 Table name: **message-protocol**
+
+`RulesUpdated` is answered **asynchronously**: the listener returns `true` and calls
+`sendResponse` from inside `applyRule`'s storage callback. Every exit path in `applyRule` reports,
+including the ones that deliberately do nothing, because "nothing happened, and here is why" is
+the answer the editor needs. A reply that is not an `ApplyReport` counts as no reply (ADR-019,
+L-36).
 
 A third type, `RESET_ICON`, was handled here but never sent by anything; it was removed on
 2026-09-02. The content script also carries a `window.__fcuContentLoaded` latch so a second
