@@ -120,9 +120,12 @@ precedence, hardened import, correctly sized store assets, a third smaller packa
 bug batch. Driving the loaded extension in a real browser then found R-42 to R-45, of which R-45
 broke the product's core promise on a large class of sites. 1.4.2 and 1.4.3 added accessibility
 names and announcements, the observer tests, the rating prompt, the editor split (R-15) and the
-support channel (R-46). The pre-release audit then found R-50 to R-60. Items 1 to 6 of the manual
-list in [docs/TESTING.md](docs/TESTING.md) now run under the DevTools protocol against a real
-Chrome, so they are no longer a manual gate.
+support channel (R-46). The pre-release audit then found R-50 to R-60, and R-61 replaced the save
+confirmation with one earned from the page rather than asserted. A master audit of the whole
+codebase on 2026-09-07 then found R-64 to R-67, of which R-65, two storage writes at once losing
+one of them, is the most serious defect this project has found by looking rather than by being
+told. Items 1 to 8 of the manual list in [docs/TESTING.md](docs/TESTING.md) now run under the
+DevTools protocol against a real Chrome, so they are no longer a manual gate.
 
 ### Paused
 
@@ -135,7 +138,7 @@ reading it, not redoing it.
 | R-22 | Internationalisation | 5 | M | **English only for now.** 114 UI strings plus 693 emoji keywords, and the useful order (extract to `en`, then the store listing, then two or three verified languages) is a week of work whose payoff cannot be measured yet. Restart when the dashboard's install breakdown shows a language worth serving *and* someone can verify that translation |
 | R-23 | Firefox and Edge | 5 | S + M | **Chrome Web Store only for now.** The walkthrough is ready in [docs/PUBLISHING.md](docs/PUBLISHING.md), Edge needs a free account and R-39, Firefox needs a source submission and a licence choice. Restart when a second channel is worth the second listing to keep in step |
 | R-24 | Cross-device sync | 5 | L | **Deferred, revisit later.** The design (sync reproducible metadata, never rendered icons) and the trade (opt-in, off by default, policy changed in the same release) are both settled; the work is not started. Export and import already move rules between devices manually |
-| R-39 | Store screenshots | 3 | S | **Deferred 2026-09-07 by decision.** The listing has none, which costs installs, but nothing blocks a release. Capture at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser now, so they are scriptable rather than manual |
+| R-39 | Store screenshots | 3 | S | **Deferred 2026-09-07 by decision.** None are in the repo, and whether the live item carries any from an earlier submission can only be read in the dashboard. Costs installs, blocks no release. Capture at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser now, so they are scriptable rather than manual |
 
 Table name: **roadmap-paused**
 
@@ -158,16 +161,16 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.4.3 (manifest and `package.json` aligned) |
+| Version | 1.4.4 (manifest and `package.json` aligned), packaged and unpublished |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
-| Users | 983 |
-| Rating | 4.4 ★ from 7 ratings |
+| Users | 1,000 (listing, read 2026-09-07) |
+| Rating | 4.5 from 8 ratings |
 | Category | Developer Tools |
-| Tests | 302 across 12 files, including jsdom locks on the favicon write path and the observer, a pure reducer for the editor's scope logic, and the support mail |
+| Tests | 392 across 14 files, including jsdom locks on the favicon write path and the observer, a pure reducer for the editor's scope logic, the save-outcome describer, and a deliberately deferred storage stub that can see a lost update |
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
-| Runtime verification | Items 1 to 6 of docs/TESTING.md plus 72 assertions from the 2026-09-07 audit, driven over the DevTools protocol against a real Chrome |
+| Runtime verification | Items 1 to 8 of docs/TESTING.md, and 102 checks across 13 suites driven over the DevTools protocol against a real Chrome on 2026-09-07 |
 | Security contact | support@palworks.ai |
 
 Table name: **product-snapshot**
@@ -777,12 +780,18 @@ left filling their canvases: the padding guidance is for the 128 used by the sto
 `chrome://extensions`, while those two are the toolbar and management icons, which should not
 shrink.
 
-### R-39 · No store screenshots exist · **S** · **paused** · *deferred 2026-09-07 (ADR-018)*
-The listing still has none, which costs installs, but it blocks no release. Deferred by decision.
-The listing requires at least one screenshot at 1280x800 or 640x400, up to five. None are in the
-repo. These have to be real captures of the popup and settings page, so they cannot be generated
-from the design masters. Good candidates: the four-way scope selector with a prefix pattern and
-its live tab match, the emoji picker, the badge editor, and the rules list.
+### R-39 · No store screenshots exist in the repo · **S** · **paused** · *deferred 2026-09-07 (ADR-018)*
+**None are in the repo**, which is the part that is certain. Whether the live item already carries
+screenshots from an earlier submission could not be read remotely: the public listing page is a
+JavaScript application and its markup does not distinguish a real screenshot from a placeholder,
+so the dashboard is the only place to check. Since Chrome requires at least one to publish, the
+item probably has one from an earlier version showing an older UI.
+
+Either way this blocks no release, and it costs installs. Deferred by decision. The requirement is
+at least one at 1280x800 or 640x400, up to five. These have to be real captures of the popup and
+the settings page, so they cannot be generated from the design masters. Good candidates: the
+four-way scope selector with a prefix pattern and its live tab match, the emoji picker, the badge
+editor, and the rules list.
 
 ### R-40 · Dependabot · **S** · ✅ done 2026-09-06
 The audit gate added by R-16 is local and only runs on push, so a new advisory was invisible until
@@ -924,7 +933,8 @@ to the OS would have launched Thunderbird on the maintainer's desktop mid-sessio
 plain `mailto:` link and the URL is verified well formed.
 
 ### R-47 · Rating prompt after sustained use · **S** · ✅ done 2026-09-06
-983 users and 7 ratings. Asking is reasonable; how you ask decides whether it helps.
+983 users and 7 ratings at the time, 1,000 and 8 now. Asking is reasonable; how you ask decides
+whether it helps.
 
 - **The trigger is successful use, not opens.** Count rules actually applied, and require both a
   count (10 or so) and elapsed time since install (3 days or so), so it reaches settled users

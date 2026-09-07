@@ -140,7 +140,7 @@ unzip -l favicon-changer-ultimate-v<VERSION>.zip | head
 ```
 
 A correct archive is 16 entries, 14 files plus two directory records, with `manifest.json` at the
-top level. v1.4.3 is 159KB:
+top level. v1.4.4 is 163KB (v1.4.3 was 159KB):
 
 ```
 index.html  options.html  manifest.json

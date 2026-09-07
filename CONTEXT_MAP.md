@@ -23,6 +23,7 @@ question.
 | What are the threats, permissions and CSP rules? | [docs/SECURITY.md](docs/SECURITY.md) |
 | What do we tell users about their data? | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) |
 | How do I submit this to a store? | [docs/PUBLISHING.md](docs/PUBLISHING.md) |
+| What exactly do I type into each store listing field? | [docs/STORE_LISTING.md](docs/STORE_LISTING.md) |
 
 Table name: **docs-by-question**
 

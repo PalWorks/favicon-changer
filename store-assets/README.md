@@ -14,7 +14,7 @@ into `dist/` by Vite. The submission walkthroughs are in [../docs/PUBLISHING.md]
 
 Table name: **store-upload-assets**
 
-Screenshots still need producing (R-39). **Capture them at 1280x800**, which is the one size both
+No screenshots exist in this repo (R-39); whether the live listing carries any from an earlier submission can only be seen in the dashboard. **Capture them at 1280x800**, which is the one size both
 stores accept: Chrome takes 1280x800 or 640x400, Edge takes 1280x800 or 640x480. Chrome allows one
 to five, Edge up to six.
 

@@ -119,6 +119,7 @@ of this code look wrong and are not, most of all the favicon write path, which i
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why the code is shaped this way, and what breaks if reversed |
 | [docs/PLAYBOOK.md](docs/PLAYBOOK.md) | Build, debug, release, roll back |
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Store submissions: Chrome, and the paused Edge and Firefox plans |
+| [docs/STORE_LISTING.md](docs/STORE_LISTING.md) | Every Chrome Web Store listing field, with the text to paste |
 | [docs/TESTING.md](docs/TESTING.md) | Test strategy and the manual checklist |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | Triaging user reports |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, CSP, permission justifications |

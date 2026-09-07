@@ -44,6 +44,7 @@ reject a re-upload of a version it already has, so bump before resubmitting.
 5. Submit. Review has historically taken a few days.
 
 Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
+Every field's copy, measured against the store's limits, is in [STORE_LISTING.md](STORE_LISTING.md).
 
 ---
 
