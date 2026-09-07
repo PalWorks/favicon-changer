@@ -77,7 +77,7 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-42 | Prefix and regex prefill never followed the address field | S | (2026-09-06) Picking the scope before typing the URL, which is the normal order on the settings page, left the pattern empty or holding the previous rule's text |
 | R-44 | The wrong icon was restored when a rule was deleted | S | (2026-09-06) An `apple-touch-icon` was captured as "the original"; sibling icon links are also no longer destroyed |
 | R-17 | Security contact | S | (2026-09-06) support@palworks.ai published in docs/SECURITY.md and the privacy policy, with a three-working-day acknowledgement |
-| R-40 | Dependabot | S | (2026-09-06) `.github/dependabot.yml`, grouped and weekly. Config only, no Actions minutes (ADR-012 holds) |
+| R-40 | Dependabot | S | (2026-09-06) `.github/dependabot.yml`, grouped and weekly. Config only; the dynamic updater bills 0 ms per run, measured 2026-09-07 (ADR-012 holds) |
 | R-36 | Icon artwork oversized | S | (2026-09-06) `128.png` regenerated from the 497px master at 94x96 inside the 128 canvas, the ~96x96 Chrome asks for. 22 KB to 15 KB |
 | R-48 | Unit-test the observer's re-apply predicate | S | (2026-09-06) Extracted to `utils/faviconObserver.ts` and covered by 13 tests. Reintroducing the R-43 bug turns 5 of them red, verified by doing it |
 | R-47 | Rating prompt | S | (2026-09-06) One ask after four days of real use, permanent dismissal, no sentiment gating (ADR-015). 18 tests. Verified in the loaded extension on both surfaces |
@@ -169,7 +169,7 @@ Table name: **roadmap-standing**
 | Tests | 392 across 14 files, including jsdom locks on the favicon write path and the observer, a pure reducer for the editor's scope logic, the save-outcome describer, and a deliberately deferred storage stub that can see a lost update |
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
-| CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
+| CI | none. Zero workflow files. The Actions tab shows only GitHub's dynamic `dependabot/dependabot-updates` entry, billing 0 ms per run (measured 2026-09-07); nothing runs on a push or a pull request |
 | Runtime verification | Items 1 to 8 of docs/TESTING.md, and 102 checks across 13 suites driven over the DevTools protocol against a real Chrome on 2026-09-07 |
 | Security contact | support@palworks.ai |
 
@@ -797,8 +797,9 @@ editor, and the rules list.
 The audit gate added by R-16 is local and only runs on push, so a new advisory was invisible until
 someone next pushed. `.github/dependabot.yml` now raises weekly npm updates, grouped into at most
 one production and one development pull request, capped at three open. It is compatible with
-ADR-012 because Dependabot runs on GitHub's own infrastructure rather than an Actions runner, so it
-consumes no Actions minutes and nothing in the repository runs on a push or a pull request. The
+ADR-012 because there is no workflow file: GitHub runs the updater and lists it in the Actions tab
+as a dynamic `dependabot/dependabot-updates` entry, whose billable time measured 0 ms per run on
+2026-09-07, and nothing in the repository runs on a push or a pull request. The
 pull requests are reviewed and merged by hand, and the pre-push hook is still what runs the type
 check, the tests, the build and the audit.
 

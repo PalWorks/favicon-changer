@@ -44,6 +44,23 @@ automated gate. That means two things worth remembering: if you clone fresh and 
 
 To install by hand: `git config core.hooksPath .githooks`.
 
+### Checking that Actions usage is still nil
+
+The Actions tab is not empty even with no workflow file, because GitHub lists its own Dependabot
+updater there as a dynamic entry. To confirm nothing of ours runs, and that the updater costs
+nothing:
+
+```bash
+find .github -name '*.yml' -o -name '*.yaml'          # dependabot.yml and nothing else
+gh api repos/PalWorks/favicon-changer/actions/workflows --jq '.workflows[].path'
+gh run list --limit 10                                 # every row should read "Dependabot Updates"
+gh api repos/PalWorks/favicon-changer/actions/runs/<id>/timing --jq .billable
+```
+
+Last run 2026-09-07: one dynamic workflow, `dynamic/dependabot/dependabot-updates`, and
+`billable.UBUNTU.total_ms` was **0** on each of the three most recent runs. A workflow path that is
+a real file, or a non-zero billable figure, means something was added that ADR-012 does not allow.
+
 ---
 
 The dev server binds to localhost only, on purpose (see [SECURITY.md](SECURITY.md)). Use

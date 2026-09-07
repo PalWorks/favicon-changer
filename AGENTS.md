@@ -99,8 +99,11 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
   `[Content]` and service-worker lines with `[BG]`. Never log page content or form values.
 - **No new dependencies** without asking. Two runtime dependencies is a feature.
 - **Keep GitHub Actions usage minimal.** Checks run in a local pre-push hook by decision; do not
-  add a workflow without asking. ADR-012. `.github/dependabot.yml` is not a workflow, it runs on
-  GitHub's own infrastructure and consumes no Actions minutes, which is why it is allowed.
+  add a workflow without asking. ADR-012. There are **zero workflow files** in this repository and
+  it must stay that way. `.github/dependabot.yml` is config, not a workflow: GitHub runs the
+  updater itself and lists it in the Actions tab as a dynamic `dependabot/dependabot-updates`
+  entry, whose billable time measured **0 ms** per run on 2026-09-07. Nothing here runs on a push
+  or a pull request. The verification command is in [docs/PLAYBOOK.md](docs/PLAYBOOK.md).
 - **Editor logic does not go in `FaviconEditor.tsx`.** That file draws. Behaviour goes in
   `components/editor/useRuleEditor.ts`, and anything about what a rule *matches* goes in
   `utils/ruleScope.ts`, which is pure and tested. Never store a derived pattern in state; see

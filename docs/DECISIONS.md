@@ -251,6 +251,18 @@ the cost in question is complexity and noise rather than money.
 **If reversed** (a workflow is added): keep the hook. The two are complementary, and the hook is
 the one that gives feedback in 9 seconds rather than 90.
 
+**Audited 2026-09-07.** The remote was checked against this decision, not just the working copy.
+Result: zero workflow files (`.github` holds `dependabot.yml` alone), and the only entry in the
+Actions tab is GitHub's own dynamic `dependabot/dependabot-updates`, with
+`billable.UBUNTU.total_ms` of **0** on each of the three most recent runs. Nothing runs on a push
+or a pull request. The commands to re-check are in [PLAYBOOK.md](PLAYBOOK.md).
+
+**Why Actions is left enabled rather than switched off at the repository level.** Setting
+`actions.permissions.enabled` to false would also stop the dynamic Dependabot workflow, and with
+it the weekly dependency pull requests, in exchange for zero minutes saved, because the measured
+figure is already zero. Leaving it enabled with no workflow file is the true minimum. This is the
+line to hold: **minimal means no workflow file, not Actions disabled.**
+
 ---
 
 ## ADR-013: Keep `prefix` as its own match type, even though regex subsumes it
