@@ -100,10 +100,10 @@ run under the DevTools protocol against a real Chrome, so they are no longer a m
 
 | ID | Item | Tier | Effort | Note |
 |---|---|---|---|---|
-| R-22 | Internationalisation | 5 | L | No `_locales`; every string inline |
-| R-23 | Firefox and Edge | 5 | L | Edge likely near-free; Firefox needs a namespace shim |
-| R-24 | Cross-device sync | 5 | L | Not a storage-area swap: `storage.sync` cannot hold a PNG data URL |
-| R-46 | In-product support channel | 4 | S or M | Proposed 2026-09-06. `mailto:` with prefilled diagnostics is S and changes no promises; a hosted form is M and changes the privacy position. Needs a decision |
+| R-22 | Internationalisation | 5 | M | Planned 2026-09-07. About 114 UI strings, plus 693 emoji keywords as a separate call. Needs a decision on which languages |
+| R-23 | Firefox and Edge | 5 | S + M | Planned 2026-09-07. Edge is paperwork. Firefox verified working on 154 with two manifest lines and no shim; the open risk is the AMO host-permission model |
+| R-24 | Cross-device sync | 5 | L | Planned 2026-09-07. Sync reproducible rule metadata, not rendered icons. Needs a decision: it puts the rule list in the user's Google account |
+| R-46 | In-product support channel | 4 | S or M | Planned 2026-09-07. Prefilled `mailto:` changes no promises (S); a hosted form needs a Worker holding the key and changes the privacy position (M). Needs a decision |
 
 Table name: **roadmap-pending**
 
@@ -699,40 +699,55 @@ many sites). No action unless that priority changes.
 
 ---
 
-### R-46 · An in-product support channel · **S or M** · *proposed 2026-09-06, needs a decision*
-Today a user with a problem has the Chrome Web Store support page and nothing else, and the
-reports that arrive have no version, no browser build and no reproduction. The extension already
-has the missing half: opt-in verbose logging the user can download.
+### R-46 · An in-product support channel · **S or M** · *planned 2026-09-07, needs a decision*
+Today a user with a problem has the Chrome Web Store support page and nothing else, and what
+arrives has no version, no browser build and no reproduction. The extension already has the
+missing half: opt-in verbose logging the user can download.
 
-Two shapes, and they are not the same product.
+Two shapes. They are not the same product, and the difference is not effort but what the product
+promises.
 
-**S, a prefilled `mailto:`.** A "Contact support" action composes a mail to support@palworks.ai
+**Variant A, a prefilled mail. S.** A "Contact support" action composes to support@palworks.ai
 with the subject and body already carrying the extension version, the browser and OS strings, the
-rule count, whether logging was on, and a line telling the user to attach the log file they can
-download from the same page. It sends from the user's own mail client. No server, no key, no new
-network request, no change to the privacy policy, no change to the store's data disclosure, and
-nothing to rate-limit. It cannot capture attachments automatically and it cannot be styled.
+rule count, whether verbose logging is on, and a line telling the user to attach the log file the
+settings page can already download. It sends from the user's own mail client.
 
-**M, a hosted form.** Name, email, description, attachments, posted to an endpoint that sends the
-mail. It looks better and captures attachments, and it costs the following:
+- No server, no key, no new network request, no change to the privacy policy, no change to the
+  store's data disclosure, nothing to rate-limit, nothing to breach.
+- It cannot capture attachments automatically, and it cannot be styled.
+- One real constraint: keep the composed body under about 2000 characters, because longer
+  `mailto:` URLs are truncated or refused by some clients. So it carries diagnostics, not logs.
 
-- **The API key cannot live in the extension.** A published extension is a public archive; anyone
-  can read a key out of it and then send mail as palworks.ai. That is already a standing decision
-  in this document. It needs a relay you control, a Cloudflare Worker holding the key, with a
-  rate limit, a body-size cap and abuse protection, because an unauthenticated send endpoint is a
-  spam cannon.
-- **It breaks the product's central promise.** The listing, the README and the privacy policy all
-  say there is no server and nothing is collected. A form that posts a name, an email address and
-  attachments to infrastructure you run makes that untrue. The store's data disclosure would have
-  to declare personally identifiable information and user communications, and the change is
-  material enough to expect a re-review.
-- **Drop the phone number** in either shape. There is no support workflow here that phones anyone,
-  it is the field most likely to stop someone submitting, and it is regulated personal data you
-  would then be holding for no purpose.
+**Variant B, a hosted form. M.** Name, email, description and attachments, posted to an endpoint
+that sends the mail. It looks better, it captures attachments, and it costs the following.
 
-**Recommendation: ship the `mailto:` now, and treat the hosted form as a separate decision taken
-on evidence.** If the mail that arrives is still unusable, or the volume justifies a queue, build
-the Worker then, and write the privacy policy change at the same time rather than after.
+1. **The Resend key cannot live in the extension.** A published extension is a public archive:
+   anyone can unzip the CRX and read a key out of it, and then send mail as palworks.ai. This is
+   already a standing decision in this document. The key belongs in a Cloudflare Worker secret,
+   with the extension posting to the Worker.
+2. **An unauthenticated send endpoint is a spam cannon.** It needs a rate limit keyed on IP (KV or
+   a Durable Object), a body-size cap, and an attachment cap. Turnstile would be the obvious abuse
+   control and it needs a third-party script, which means widening
+   `content_security_policy.extension_pages` from `script-src 'self'`. Weakening the CSP to fight
+   spam is a poor trade; prefer a Worker-side rate limit and no third-party script in the page.
+3. **It breaks the central promise.** The listing, the README and the privacy policy all say there
+   is no server and nothing is collected. A form that posts a name, an email address and
+   attachments to infrastructure you run makes that untrue. The store's data disclosure would have
+   to declare personally identifiable information and user communications, and that is material
+   enough to expect a re-review.
+4. **Retention.** The Worker should forward and forget. Anything it stores is a thing that can
+   later leak, for no support benefit.
+5. **Drop the phone number** in either variant. No support workflow here telephones anyone, it is
+   the field most likely to stop someone submitting, and it is regulated personal data held for no
+   purpose.
+
+**Note on the local Resend CLI.** This machine has the Resend CLI authenticated for palworks.ai.
+That is useful for sending mail *from here*; it is not a route to the extension sending mail. The
+extension can never hold that credential, and there is no configuration in which it should.
+
+**Recommendation: ship A now, and treat B as a separate decision taken on evidence.** If the mail
+that arrives from A is still unusable, or the volume justifies a queue, build the Worker then, and
+write the privacy policy change at the same time rather than after.
 
 ### R-47 · Rating prompt after sustained use · **S** · ✅ done 2026-09-06
 983 users and 7 ratings. Asking is reasonable; how you ask decides whether it helps.
@@ -774,19 +789,155 @@ tab.
 
 ## Tier 5: reach (each is a project, not a task)
 
-### R-22 · Internationalisation · **L**
-`_locales` + `chrome.i18n`, every string currently inline in TSX (L-21). The store listing needs
-translating too. Highest-volume languages first.
+### R-22 · Internationalisation · **M**, not L · *planned 2026-09-07, needs two decisions*
+Sized rather than guessed: **about 114 user-facing strings** across the UI, concentrated in six
+files (BadgeSection 16, RulesList 15, FaviconEditor 14, UploadSection 14, GlobalSettings 9,
+EditorHeader 9). That is a week's work, not a month's, which is why this moves from L to M.
 
-### R-23 · Firefox and Edge · **L**
-Edge is likely near-free. Firefox needs the `browser` namespace, a background-script shim and a
-second manifest (L-20). Worth scoping only after Tier 1 and 2 land, because it doubles the manual
-test matrix in [docs/TESTING.md](docs/TESTING.md).
+Separately, `constants.ts` holds **693 emoji search keywords**. Those are the bulk of the strings
+in the repo and a different question, below.
 
-### R-24 · Cross-device sync · **L**
-Not a storage-area swap: `storage.sync`'s ~8 KB per-item limit cannot hold a PNG data URL
-(ADR-004, L-22). Requires either syncing rules while keeping icons local, or an icon store that
-is not inline data URLs. Design before estimating.
+**Mechanism.** `_locales/<lang>/messages.json` plus `chrome.i18n.getMessage`, which is native,
+dependency-free, works in every context including the content script, and is what the store reads
+for a translated listing. Two limits matter here: it follows the browser UI language with no
+in-product language picker, and it has no plural forms, so "Matches 1 of your 3 open tabs" needs
+either separate singular and plural messages or the `n === 1 ? '' : 's'` the code already does,
+repeated per language.
+
+Wrap it in a `t()` helper in `utils/i18n.ts` that falls back to the English catalogue when
+`chrome.i18n` is absent, because `npm run dev` runs without any chrome APIs (`IS_DEV`) and the UI
+would otherwise render bare message keys. Import `_locales/en/messages.json` directly so there is
+one source of truth rather than a second English copy to drift.
+
+**Decision 1: which languages.** The Chrome Web Store dashboard breaks installs down by country;
+that list should choose, not a guess. The real constraint is verification: a mistranslated
+technical UI ("prefix", "regex", "matcher") is worse than English, and machine translation cannot
+be spot-checked in a language nobody on the project reads. Recommended: start with the two or three
+that have both real install numbers and a reader here, and add more only as they can be checked.
+
+**Decision 2: the 693 emoji keywords.** They exist so emoji search works. Either leave them English
+and accept that search does not work in other languages (S, honest, and search is a convenience),
+or generate catalogues from the CLDR emoji annotations, a maintained public dataset covering around
+90 languages (M, and it adds a build step plus a data file per language). Recommended: leave them
+English in the first pass and say so in the copy, then consider CLDR once the interface itself is
+translated.
+
+**Codebase specifics.**
+
+| Thing | Why it needs care |
+|---|---|
+| `SCOPES` in `utils/ruleScope.ts` | The largest copy block outside components, already flagged there as the first thing to move behind the catalogue |
+| `describeImport()` in `utils/importRules.ts` | Builds sentences from parts; needs placeholders, not concatenation |
+| `role="status"` messages | Announced to screen readers, so an untranslated one is worse than silence |
+| Dates in `RulesList` | Already localised via `toLocaleDateString()`; leave alone |
+| RTL (Arabic, Hebrew) | Needs `dir` handling and Tailwind logical properties (`ps-`/`pe-` rather than `pl-`/`pr-`). Its own piece of work: exclude from the first pass or commit to it explicitly |
+| The store listing | Translated in the dashboard, not the repo. Easy to forget, and it is what a prospective user actually reads |
+
+Table name: **r22-specifics**
+
+**Sequence.** Extract to `en` first and ship that alone. It is the whole refactor, it is verifiable
+because the UI must look identical afterwards, and it turns every later language into a data file.
+
+### R-23 · Firefox and Edge · **S for Edge, M for Firefox** · *planned 2026-09-07, verified in a real browser*
+This was written as "Edge likely near-free; Firefox needs a namespace shim". Firefox 154 was then
+actually installed and driven, and **the shim assumption was wrong**. What follows is measured.
+
+**Edge.** Chromium, so the same MV3 package. The work is a Partner Center submission and a second
+listing to keep in step, not code. Do it separately and first: a day of paperwork for a second
+distribution channel.
+
+**Firefox 154, verified.** The built `dist/` was installed as a temporary add-on over WebDriver
+BiDi and exercised end to end.
+
+| Question | Result |
+|---|---|
+| Does the package install? | Only after the two manifest changes below. `invalid web extension` before them |
+| Does the background script run? | Yes. `onInstalled` fired and opened the options page |
+| Does the options page render? | Yes, including the four-way scope selector |
+| Do the `chrome.*` APIs exist? | **All of them.** `storage.local`, `storage.sync`, `tabs.query`, `scripting.executeScript`, `action.setPopup`, `extension.isAllowedFileSchemeAccess`, `runtime.getManifest`, `i18n.getMessage`. No polyfill, no shim, no `browser.*` rewrite |
+| Does the content script run and answer `RulesUpdated`? | Yes, on http pages |
+| Does ADR-001 hold, i.e. does mutating the tracked link's href repaint a **background** tab? | **Yes.** Verified twice: with a plain URL (red to blue while backgrounded) and end to end through the extension |
+| Do `data:` URL favicons render? | Yes. Every icon this extension makes is a data URL, so this was the make-or-break question |
+
+Table name: **r23-firefox-verified**
+
+**The two manifest changes.** Firefox MV3 has no `background.service_worker`, and an add-on needs
+an id:
+
+```json
+"background": { "scripts": ["background.js"], "type": "module" },
+"browser_specific_settings": { "gecko": { "id": "favicon-changer-ultimate@palworks.ai", "strict_min_version": "128.0" } }
+```
+
+That belongs in the build as a target flag in `vite.config.ts`, not as a second manifest file to
+keep in sync by hand.
+
+**Still unknown, and stated as such.** None of these were tested, and each must be before shipping:
+
+- **Host permissions.** `<all_urls>` behaved as granted under a *temporary* install. A signed AMO
+  install may present it as opt-in per site, which would mean the extension does nothing until the
+  user grants access, and that needs its own onboarding copy. The largest remaining risk.
+- **AMO review and signing**, and what `strict_min_version` to actually claim.
+- **ADR-007**, the Linux file-dialog workaround. Firefox panel blur behaviour differs, so the
+  `setPopup('')` trick may be unnecessary or may misbehave.
+- **Canvas emoji rendering.** A different font stack, so glyphs will not match Chrome and may clip.
+- **Popup sizing.** Firefox sizes the panel differently from Chrome's bubble.
+
+**Revised estimate.** Firefox is a week, dominated by the permission model and store review rather
+than by code. The `browser`-versus-`chrome` work that made this look like a project does not exist.
+
+### R-24 · Cross-device sync · **L** · *planned 2026-09-07, needs a decision on the privacy trade*
+Not a storage-area swap, and the reason is arithmetic. `chrome.storage.sync` is documented at
+roughly 100 KB total, **8 KB per item**, 512 items, and write quotas around 1800 an hour and 120 a
+minute (verify against current docs before building). A 128x128 PNG data URL is 12 to 25 KB, so a
+single rule's icon exceeds the per-item limit and four of them would exceed the whole quota. Icons
+cannot go through `storage.sync`, full stop.
+
+**The design that works: sync what is reproducible, not what is rendered.** Most icons this
+extension makes are a *function* of stored metadata, not irreplaceable bytes:
+
+| Source type | Icon reproducible on another device? | Syncs |
+|---|---|---|
+| `emoji` | Yes, from `metadata.emojiChar` | Fully |
+| `url` | Yes, it is a remote address | Fully |
+| `custom` (badge or overlay) | Yes, from the badge config plus the site's own favicon | Fully, though the base icon is refetched so it can differ |
+| `upload` | **No.** The bytes are the only copy | Rule syncs, image does not |
+
+Table name: **r24-syncability**
+
+So sync the rule minus `faviconUrl`, and re-render on arrival. A rule then costs a few hundred
+bytes instead of 25 KB, which fits several hundred rules inside the quota. Uploaded images stay on
+the device that made them, and the rule arrives flagged so the UI can say "image not synced,
+re-upload on this device" rather than showing a broken icon. That is honest and needs no server.
+
+**The decision, and it is not a technical one.** Turning this on uploads the user's rule list to
+their Google account, and a rule list is a list of sites they care about. Today the product's whole
+claim is that nothing leaves the device. So: **off by default, opt-in, with copy that says plainly
+what leaves and where it goes**, and a matching paragraph in the privacy policy and the store's
+data disclosure. Shipping it on by default would be a breach of the promise the listing makes,
+whatever the code does.
+
+**The hard parts, in order of how much they will hurt.**
+
+1. **Deletions.** Without tombstones, a rule deleted on device A comes back from device B on the
+   next merge, for ever. Either store `deletedAt` markers with a TTL and reap them, or accept in
+   v1 that deletes do not propagate and say so. Tombstones are the right answer and the fiddliest
+   part of the work.
+2. **The first merge.** Existing users have local rules on several devices already. The first sync
+   must union them by `updatedAt`, never overwrite, and never delete. Get this wrong once and it
+   is someone's whole configuration.
+3. **Conflicts.** Last write wins on `updatedAt`, which every rule already carries since R-26.
+   Good enough for a favicon rule; no need for anything cleverer.
+4. **Write quotas.** 120 writes a minute is easy to blow. Saves already commit on blur rather than
+   per keystroke (R-05), and bulk operations already batch (R-09, `deleteRules`), so the shape is
+   right, but a 200-rule import must be one write and not two hundred.
+5. **Storage-area plumbing.** `utils/storage.ts` assumes `chrome.storage.local` throughout. This
+   needs a deliberate split between "local, the source of truth for icons" and "sync, the source
+   of truth for rule metadata", not a find and replace.
+
+**Cheaper alternative worth naming.** Export and import already exist and already move rules
+between devices, manually. If the goal is "I set up a new laptop", that covers it today for zero
+work and zero privacy change. Sync is worth building only if the goal is continuous.
 
 ### R-17 · Publish a security contact · **S** · ✅ done 2026-09-06
 support@palworks.ai, published in [docs/SECURITY.md](docs/SECURITY.md) and in the privacy policy,
