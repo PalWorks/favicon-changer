@@ -54,8 +54,9 @@ reject a re-upload of a version it already has, so bump before resubmitting.
    [STORE_LISTING.md](STORE_LISTING.md) §0 and the **product-snapshot** version row in
    [../ROADMAP.md](../ROADMAP.md).
 
-> `v1.4.4` was tagged at submission on 2026-09-07, pointing at `de1793a`. The code in that tree is
-> identical to the packaged commit `b26a8b9`; the two commits between them touch documentation only,
+> `v1.4.4` was tagged at submission on 2026-09-07; `git show v1.4.4` names the commit and carries
+> the package's sha256 in the tag message. The code in that tree is identical to the packaged
+> commit `b26a8b9`; every commit since touches documentation only,
 > which was verified with `git diff b26a8b9 HEAD -- . ':(exclude)*.md'` before tagging.
 
 Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
