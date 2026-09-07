@@ -192,3 +192,14 @@ Things that must stay true. Breaking one of these is a bug even if tests pass.
    can say whether the address loads (ADR-019); same address, same request, no new destination.
 9. **Stored icons stay small.** Uploads are capped at 128px and compressed, because
    `chrome.storage.local` has a hard quota and there is no `unlimitedStorage` permission.
+10. **One rule per `(matchType, matcher)`.** Two rules with the same scope and matcher are
+    meaningless, since only one of them could ever apply, and `findBestRule` breaks an exact tie
+    by keeping the earlier one, so the newer of a pair loses silently. `saveRule` collapses the
+    pair rather than allowing it (ADR-020).
+11. **A matcher is canonical for its scope.** A `domain` matcher is a hostname the browser could
+    report, and an `exact_url` matcher is a URL the browser could produce, which means the
+    settings page's free text is normalised (`hostnameFromInput`, `canonicalUrl`) or refused. A
+    matcher that cannot match anything is a rule the user cannot debug: it looks right in the
+    list and does nothing. See R-49 and R-64.
+12. **Mutations of storage do not overlap.** Every write goes through one queue per context, and
+    writes only its own key, or a concurrent change is lost outright (ADR-020, L-38).

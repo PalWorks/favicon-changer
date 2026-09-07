@@ -59,12 +59,20 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
 
         setSourceError(null);
         let objectUrl: string | null = null;
+        // The base icon is fetched over the network, and the controls that
+        // trigger this effect include a colour picker and an opacity slider, so
+        // several fetches can be in flight at once. Without this guard the one
+        // that finishes last wins, which on a slow link can leave the preview,
+        // and therefore the icon that Apply saves, showing an older setting than
+        // the controls next to it. ROADMAP R-67.
+        let superseded = false;
 
         const generate = async () => {
             try {
                 // Use fetch to bypass CORS issues with canvas
                 const response = await fetch(sourceIconUrl);
                 const blob = await response.blob();
+                if (superseded) return;
                 objectUrl = URL.createObjectURL(blob);
 
                 const img = new Image();
@@ -75,6 +83,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                     img.onload = resolve;
                     img.onerror = reject;
                 });
+                if (superseded) return;
 
                 const canvas = document.createElement('canvas');
                 const SIZE = 128;
@@ -95,6 +104,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
 
                 setPreviewUrl(canvas.toDataURL('image/png'));
             } catch (error) {
+                if (superseded) return;
                 logger.error('Failed to generate badge preview', error);
                 setPreviewUrl(null);
                 setSourceError("Could not load this page's favicon to draw on. Set an emoji or upload an image first.");
@@ -108,7 +118,8 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
         generate();
 
         return () => {
-             if (objectUrl) {
+            superseded = true;
+            if (objectUrl) {
                 URL.revokeObjectURL(objectUrl);
             }
         };
@@ -133,7 +144,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
     };
 
     return (
-        <Accordion title="Add Badge or Overlay" icon="🏷️" isOpen={isOpen} onToggle={onToggle}>
+        <Accordion title="Add Badge or Overlay" icon={<svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V5a2 2 0 012-2z" /></svg>} isOpen={isOpen} onToggle={onToggle}>
             <div className="space-y-4">
                 {/* Mode Toggle */}
                 <div className="flex bg-slate-100 p-1 rounded-lg">

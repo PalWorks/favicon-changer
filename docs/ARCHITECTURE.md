@@ -147,7 +147,9 @@ User picks emoji / uploads image / builds badge
    -> section component renders it to a 128px <canvas> (64px for emoji)
    -> canvas.toDataURL('image/png')  [+ compressFaviconDataUrl() for uploads]
    -> useRuleEditor.handleSave() builds the FaviconRule
-   -> utils/storage.saveRule() -> chrome.storage.local.set({rules})
+   -> utils/storage.saveRule(), queued behind any mutation already in flight (ADR-020)
+        -> reads `rules`, collapses any rule with the same (matchType, matcher)
+        -> chrome.storage.local.set({rules})     only that key, never `settings` too
    -> notifyTabs(): for every non-restricted, non-discarded tab
         -> ensureContentScriptReady(tabId)   PING; chrome.scripting.executeScript if silent
                                              (active tab only; the rest are pinged without it)
@@ -169,6 +171,10 @@ Then, and only for the status line, the editor finds out whether any of that was
         -> isApplyReport() rejects anything else, including the previous release's {ok:true}
    -> describeSaveOutcome() -> one of nine outcomes -> the status banner
         'confirmed' is the only one that shows green, and only for THIS rule's id
+   -> if the tab did not answer, ONE late retry on a longer budget, unawaited, and
+      the banner is corrected if it answers (R-66). A page whose main thread is
+      blocked cannot reply inside the first budget and would otherwise be
+      reported as unconfirmed when it was about to apply the rule.
 ```
 
 The favicon itself is almost always stored **inline as a `data:` URL** inside the rule, not as a
@@ -209,7 +215,9 @@ Web Store, where injection always fails.
 
 ## 6. Storage layout
 
-One flat `chrome.storage.local` namespace, no nesting beyond this:
+One flat `chrome.storage.local` namespace, no nesting beyond this. Every mutation goes through
+one queue per context and writes only its own key, because two overlapping read-modify-writes
+lose one of the two changes outright (ADR-020, L-38):
 
 | Key | Type | Written by | Purpose |
 |---|---|---|---|

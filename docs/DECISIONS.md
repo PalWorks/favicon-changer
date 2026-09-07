@@ -329,7 +329,7 @@ four separate days and the user still has a rule. One "Rate it" going straight t
 listing, one "No thanks" that is permanent. No second ask, ever, and no question asked before the
 link.
 
-**Why.** 983 users and 7 ratings is worth addressing, and asking is legitimate. How you ask is
+**Why.** 1,000 users and 8 ratings is worth addressing, and asking is legitimate. How you ask is
 where this goes wrong:
 
 - **Counting opens would ask the wrong people.** Someone who opened the popup ten times on the day
@@ -532,3 +532,53 @@ and the copy says "updated" on the strength of that and no more.
 **If reversed.** The four cases above go back to reporting success. The exclusion case in
 particular is the one that cannot be diagnosed by the user: the rule is in the list, the site is
 in the excluded list, and the two facts sit on different pages.
+
+---
+
+## ADR-020: Serialise every storage mutation, and write only the key that changed
+**Status**: Accepted · 2026-09-07
+
+**Decision.** All mutations of `chrome.storage.local` in a given context run one after another
+through a single promise chain (`serialise` in [../utils/storage.ts](../utils/storage.ts)), and
+each writes only the top-level key it actually changed. `saveRule` additionally treats
+`(matchType, matcher)` as a rule's identity: saving over an existing pair collapses the two,
+keeping the newer icon and the earlier `createdAt`.
+
+**Why.** `chrome.storage` has no transactions, and every mutation here is a read-modify-write of
+a whole map. Two of them at once means the second read happens before the first write, so the
+first change is **lost**. Not duplicated, lost. Measured in a real browser: two saves started
+together left one rule where there should have been two.
+
+Three separate ways to reach it, all real:
+
+1. **Two quick clicks in the editor.** Picking an emoji *is* the save, with no Apply button to
+   disable, so two clicks start two saves. Either one rule vanishes, or two rules exist for one
+   matcher, and `findBestRule` breaks an exact tie by keeping the **earlier** one, so the user's
+   second choice silently loses.
+2. **The popup and the settings page open together**, which the product supports and
+   [TESTING.md](TESTING.md) lists as a case to walk.
+3. **Writing keys nobody asked to change.** `persistData` wrote `rules` *and* `settings` on every
+   mutation, from whatever it had read a moment earlier. So saving a rule could revert a
+   concurrent settings change, and saving a setting could revert a rule, with no race between two
+   *rule* writes needed at all.
+
+**What it does not fix.** Two different contexts writing in the same few milliseconds. A queue is
+per-context, and there is no lock, no compare-and-swap and no transaction in the API. The window
+is now as small as the API allows: one read of one key, then one write of that key, with nothing
+in between. Recorded as [L-38](LIMITATIONS.md).
+
+**Consequences.**
+
+- Mutations no longer overlap, so they are marginally slower in sequence and correct instead of
+  fast and occasionally wrong. Nothing here is on a hot path: the content script only ever
+  *reads*.
+- A failed write, a full quota being the realistic case, rejects to its own caller and does not
+  break the queue for later writers.
+- The duplicate collapse is self-healing: it also removes duplicates already in storage from an
+  import or an older build, the first time either of them is saved over.
+- `(matchType, matcher)` is now effectively a unique key. Nothing else in the code assumed that,
+  and [DOMAIN.md](DOMAIN.md) invariant 10 now says so out loud.
+
+**If reversed.** The lost-update race comes back, and with it a bug whose symptom is a rule the
+user is sure they created not existing. That is the hardest class of report to believe and the
+hardest to reproduce, which is why this is written down rather than left as "be careful".

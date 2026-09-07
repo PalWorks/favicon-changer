@@ -17,10 +17,10 @@ than trusting this file a year from now.
 ## 0. The package, for every store
 
 ```bash
-npm run check          # typecheck + 302 tests, the same gate the pre-push hook runs
+npm run check          # typecheck + 392 tests, the same gate the pre-push hook runs
 npm run build          # two passes: pages/worker, then the content script
-cd dist && zip -r ../favicon-changer-ultimate-v1.4.3.zip . && cd ..
-unzip -l favicon-changer-ultimate-v1.4.3.zip | tail -3   # sanity check the contents
+cd dist && zip -r ../favicon-changer-ultimate-v1.4.4.zip . && cd ..
+unzip -l favicon-changer-ultimate-v1.4.4.zip | tail -3   # sanity check the contents
 ```
 
 The zip must contain `manifest.json` at its **root**, not inside a folder. Both Chrome and Edge

@@ -20,6 +20,40 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   excludedDomains: [],
 };
 
+/**
+ * Serialises every mutation in this context, one after another.
+ *
+ * `chrome.storage` has no transactions, so each mutation below is a
+ * read-modify-write. Run two of them at once and the second read happens before
+ * the first write, so the first change is **lost**: not duplicated, lost.
+ * Reproduced in a real browser with two interleaved writes, where one of the two
+ * rules simply did not exist afterwards (ROADMAP R-65).
+ *
+ * Two quick clicks in the editor are enough to reach it, and so is the popup and
+ * the settings page being open together, which the product supports and
+ * docs/TESTING.md lists as a case to test.
+ *
+ * This closes it inside one context, which is where the click-twice case lives.
+ * Two *different* contexts writing in the same few milliseconds is not solvable
+ * this way and is documented as L-38; the writes below are kept as tight as
+ * possible so that window stays as small as the API allows.
+ */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+const serialise = <T>(work: () => Promise<T>): Promise<T> => {
+  // `.then(work, work)` rather than `.then(work)`: a write that failed, a full
+  // quota being the realistic case, must not stop every later write. The caller
+  // still gets its own rejection, from `run`.
+  const run = writeQueue.then(work, work);
+  // The stored tail, on the other hand, must never be a rejected promise with
+  // nothing attached to it: if no further write follows, that is an unhandled
+  // rejection in the console. Deliberately invisible to the tests, since the
+  // line above already keeps the chain moving; its only job is the console.
+  writeQueue = run.catch(() => undefined);
+  return run;
+};
+
+
 export const getStorageData = async (): Promise<StorageData> => {
   if (IS_DEV) {
     const data = localStorage.getItem(MOCK_STORAGE_KEY);
@@ -89,17 +123,36 @@ export const getStorageData = async (): Promise<StorageData> => {
   });
 };
 
-export const saveRule = async (rule: FaviconRule): Promise<void> => {
-  const { rules, settings } = await getStorageData();
+export const saveRule = async (rule: FaviconRule): Promise<void> => serialise(async () => {
+  const { rules } = await getStorageData();
 
-  // If editing, overwrite. If new, add.
-  const updatedRules = { ...rules, [rule.id]: rule };
+  // The same scope and matcher is the same rule, whatever id it carries: only
+  // one of the two could ever apply, and `findBestRule` breaks an exact tie by
+  // keeping the EARLIER rule, so a stray duplicate silently beats the rule the
+  // user just saved. Two clicks in quick succession used to produce exactly
+  // that, because the id was chosen from React state that had not caught up.
+  // Collapsing here rather than in the editor also repairs duplicates already
+  // in storage, from an import or from an older build. ROADMAP R-65.
+  const duplicate = Object.values(rules).find(r =>
+    r.id !== rule.id && r.matchType === rule.matchType && r.matcher === rule.matcher);
 
-  await persistData({ rules: updatedRules, settings });
+  const updatedRules = { ...rules };
+  let toWrite = rule;
+  if (duplicate) {
+    logger.info('[Storage] Collapsing a duplicate rule for the same matcher', {
+      kept: rule.id, removed: duplicate.id, matcher: rule.matcher,
+    });
+    delete updatedRules[duplicate.id];
+    // The rules list orders by createdAt, so keep the earliest of the two.
+    toWrite = { ...rule, createdAt: Math.min(rule.createdAt, duplicate.createdAt) };
+  }
+  updatedRules[toWrite.id] = toWrite;
+
+  await persistKey('rules', updatedRules);
 
   // Notify content script
   notifyTabs();
-};
+});
 
 /**
  * Deletes several rules in one write.
@@ -110,35 +163,47 @@ export const saveRule = async (rule: FaviconRule): Promise<void> => {
 export const deleteRules = async (ids: string[]): Promise<void> => {
   if (!ids.length) return;
 
-  const { rules, settings } = await getStorageData();
-  const remaining = { ...rules };
-  ids.forEach(id => { delete remaining[id]; });
+  return serialise(async () => {
+    const { rules } = await getStorageData();
+    const remaining = { ...rules };
+    ids.forEach(id => { delete remaining[id]; });
 
-  await persistData({ rules: remaining, settings });
-  notifyTabs();
+    await persistKey('rules', remaining);
+    notifyTabs();
+  });
 };
 
-export const deleteRule = async (id: string): Promise<void> => {
-  const { rules, settings } = await getStorageData();
+export const deleteRule = async (id: string): Promise<void> => serialise(async () => {
+  const { rules } = await getStorageData();
   const { [id]: _, ...remainingRules } = rules;
 
-  await persistData({ rules: remainingRules, settings });
+  await persistKey('rules', remainingRules);
   notifyTabs();
-};
+});
 
-export const saveSettings = async (settings: GlobalSettings): Promise<void> => {
-  const data = await getStorageData();
-  await persistData({ ...data, settings });
+export const saveSettings = async (settings: GlobalSettings): Promise<void> => serialise(async () => {
+  await persistKey('settings', settings);
   notifyTabs();
-};
+});
 
-const persistData = async (data: StorageData): Promise<void> => {
+/**
+ * Writes one top-level key.
+ *
+ * Deliberately not the whole StorageData. `persistData` used to write `rules`
+ * AND `settings` on every mutation, from whatever it had read a moment earlier,
+ * so saving a rule could revert a concurrent settings change and saving a
+ * setting could revert a rule (R-65). Each mutation now writes only what it
+ * actually changed.
+ */
+const persistKey = async (key: 'rules' | 'settings', value: unknown): Promise<void> => {
   if (IS_DEV) {
-    localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(data));
+    const raw = localStorage.getItem(MOCK_STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : { rules: {}, settings: DEFAULT_SETTINGS };
+    localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify({ ...data, [key]: value }));
     return;
   }
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set(data, () => {
+    chrome.storage.local.set({ [key]: value }, () => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
       } else {
@@ -214,8 +279,10 @@ export const importRulesFromJson = async (jsonString: string): Promise<ImportRep
   }
 
   try {
-    const { rules: currentRules, settings } = await getStorageData();
-    await persistData({ rules: { ...currentRules, ...outcome.accepted }, settings });
+    await serialise(async () => {
+      const { rules: currentRules } = await getStorageData();
+      await persistKey('rules', { ...currentRules, ...outcome.accepted });
+    });
   } catch (e: any) {
     logger.error('Import failed to persist', e);
     const isQuota = e?.message?.toLowerCase().includes('quota');
@@ -292,10 +359,13 @@ export const notifyTabs = () => {
  * across an extension update and is still running the previous content script,
  * which replies `{ok: true}`. See L-36.
  */
-export const requestApplyReport = async (tabId: number): Promise<ApplyReport | null> => {
+export const requestApplyReport = async (
+  tabId: number,
+  options: { timeoutMs?: number } = {},
+): Promise<ApplyReport | null> => {
   if (IS_DEV) return null;
 
-  const reply = await requestFromTab<unknown>(tabId, { type: 'RulesUpdated' });
+  const reply = await requestFromTab<unknown>(tabId, { type: 'RulesUpdated' }, options);
   if (!isApplyReport(reply)) {
     if (reply) logger.debug('[Storage] Tab replied without a report', reply);
     return null;

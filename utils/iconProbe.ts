@@ -39,6 +39,8 @@ export interface ProbeImage {
 export interface ProbeOptions {
     timeoutMs?: number;
     makeImage?: () => ProbeImage;
+    /** Overridable so the offline branch can be tested without a network. */
+    online?: boolean;
 }
 
 /**
@@ -49,7 +51,20 @@ export interface ProbeOptions {
  * the other direction: only an actual error event is evidence of failure.
  */
 export const probeIconUrl = async (url: string, options: ProbeOptions = {}): Promise<boolean | undefined> => {
-    const { timeoutMs = ICON_PROBE_TIMEOUT_MS, makeImage } = options;
+    const {
+        timeoutMs = ICON_PROBE_TIMEOUT_MS,
+        makeImage,
+        // `!== false` rather than a truthiness test: an environment with no
+        // navigator, or one that does not implement onLine, must not be read as
+        // being offline.
+        online = typeof navigator === 'undefined' ? true : navigator.onLine !== false,
+    } = options;
+
+    // With no network at all, an error event says nothing about the address.
+    // Reporting "that image address did not load" to someone on a plane would
+    // be the same confident wrong answer this whole mechanism replaced: the
+    // icon really will not appear, but the address is not why.
+    if (!online) return undefined;
 
     // One guard, deliberately, because it is one fact: https is the only scheme
     // this can learn anything from. It also covers the two cases there is no

@@ -21,6 +21,7 @@ import { probeIconUrl } from '../../utils/iconProbe';
 import { logger } from '../../utils/logger';
 import { findConflictingRule, patternMatches } from '../../utils/matcher';
 import { popupClosesOnFileDialog } from '../../utils/platform';
+import { LATE_APPLY_REPORT_TIMEOUT_MS } from '../../constants';
 import { hostnameFromInput } from '../../utils/patterns';
 import { describeImport } from '../../utils/importRules';
 import {
@@ -324,6 +325,7 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
             savedRuleId: rule.id,
             targetLabel: tab.hostname,
             checkedTab: true,
+            tabId: tab.id,
             report: await requestApplyReport(tab.id),
             iconLoaded,
         };
@@ -365,14 +367,38 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
         }
     };
 
+    // Only the newest verification may write to the status line. Without this,
+    // the late follow-up below could overwrite the result of a save the user
+    // made after it.
+    const verifyRun = useRef(0);
+
     const verifyAndReport = async (rule: FaviconRule) => {
+        const run = ++verifyRun.current;
         lastSave.current = rule;
         try {
-            showOutcome(describeSaveOutcome(await verifySave(rule)));
+            const verification = await verifySave(rule);
+            if (verifyRun.current !== run) return;
+            showOutcome(describeSaveOutcome(verification));
+
+            // A page whose main thread is busy cannot run its message handler
+            // inside the budget, so it reads as unconfirmed even though it will
+            // apply the rule as soon as it is free. Measured: a page blocked for
+            // 3s reports "did not confirm" and then updates anyway. So ask once
+            // more with a longer budget, without making the user wait for it,
+            // and replace the message if the answer arrives. ROADMAP R-66.
+            if (verification.checkedTab && !verification.report && verification.tabId !== undefined) {
+                const late = await requestApplyReport(verification.tabId, {
+                    timeoutMs: LATE_APPLY_REPORT_TIMEOUT_MS,
+                });
+                if (late && verifyRun.current === run) {
+                    showOutcome(describeSaveOutcome({ ...verification, report: late }));
+                }
+            }
         } catch (e) {
             // The rule is saved whatever happened here, so this must never be
             // reported as a failed save. Fall back to the honest answer.
             logger.error('Could not verify the save', e);
+            if (verifyRun.current !== run) return;
             showOutcome(describeSaveOutcome({
                 savedRuleId: rule.id,
                 targetLabel: '',
@@ -432,9 +458,14 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
             const matcher = currentMatcher;
 
             if (!matcher) {
+                // Each scope fails for its own reason, and a message naming the
+                // wrong one is worse than none. R-64 added the exact_url case,
+                // which used to save the raw text and match nothing.
                 const message = matchType === 'domain'
                     ? 'Could not read a domain from that address.'
-                    : 'Enter a pattern to match.';
+                    : matchType === 'exact_url'
+                        ? 'Enter a full page address, for example https://example.com/page.'
+                        : 'Enter a pattern to match.';
                 setStatusMessage({ type: 'error', text: message });
                 throw new Error(message);
             }

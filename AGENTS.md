@@ -122,7 +122,7 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
 ## 5. Definition of done
 
 ```bash
-npm run check         # typecheck + 366 tests, both must pass; add tests for logic you added
+npm run check         # typecheck + 392 tests, both must pass; add tests for logic you added
 npm run build         # must produce dist/ with both passes
 ```
 

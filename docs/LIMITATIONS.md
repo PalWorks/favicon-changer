@@ -219,7 +219,7 @@ needed is two manifest lines (`background.scripts` instead of `background.servic
 untested, and [PUBLISHING.md](PUBLISHING.md) for the submissions themselves.
 
 ### L-21 · English only → **R-22**, *paused by decision 2026-09-07 (ADR-018)*
-No `_locales`, every string inline in TSX. 983 users with no localisation ceiling lifted. Sized on
+No `_locales`, every string inline in TSX. 1,000 users with no localisation ceiling lifted. Sized on
 2026-09-07 at about 114 UI strings plus 693 emoji search keywords, then deferred: English only for
 now, and non-English users see English. Not a defect, and not to be filed as one. R-22 carries the
 plan and the trigger for restarting it.
@@ -306,17 +306,22 @@ message that costs one needless reload beats a confirmation that was never recei
 only tabs open at the moment of an update, and only until they are reloaded, which is the same
 window as [L-34](#l-34--background-tabs-keep-their-old-icon-across-an-extension-update--open-inherent).
 
-### L-37 · An `http:` icon address is never checked, and will not load on a secure page · *open*
-Two facts about a rule whose icon is a plain `http:` URL, neither of which the product says out
+### L-37 · An `http:` icon address is never checked, cannot be previewed, and will not load on a secure page · *open*
+Three facts about a rule whose icon is a plain `http:` URL, none of which the product says out
 loud yet:
 
-1. **It is not probed.** `probeIconUrl` only tries `https:`. An extension page cannot load an
-   insecure subresource under Manifest V3, so an `http:` address fires `onerror` whatever is at
-   the other end. Measured from the options page: `http://127.0.0.1:8899/blue.png` and
-   `http://localhost:8899/blue.png` both error while an `https:` image of the same size loads, and
-   a genuine `https:` 404 errors correctly. Probing http would therefore warn confidently about a
-   working address, which is the failure ADR-019 exists to remove.
-2. **On an `https:` page it is mixed content.** Chrome upgrades an optionally-blockable
+1. **It is not probed, and cannot be.** The cause is our own declared policy, not a browser
+   quirk: `public/manifest.json` sets `img-src 'self' data: blob: https:` for extension pages,
+   with no `http:`. Measured from the options page: `http://127.0.0.1:8899/blue.png` and
+   `http://localhost:8899/blue.png` both error while an `https:` image of the same size loads,
+   and a genuine `https:` 404 errors correctly. So `probeIconUrl` only tries `https:`; probing
+   http would warn confidently about a working address, which is the failure ADR-019 exists to
+   remove. Widening the CSP is not the answer (see [SECURITY.md](SECURITY.md)).
+2. **It cannot be previewed in our own UI either**, for the same reason. The rules list and the
+   editor fall back to a globe outline for such a rule, with no explanation. The icon still works
+   on an `http:` page, because the content script writes into the page and is governed by the
+   page's CSP rather than ours.
+3. **On an `https:` page it is mixed content.** Chrome upgrades an optionally-blockable
    mixed-content image to https and blocks it when the upgrade fails, so an `http:` icon works on
    an `http:` page and usually does not on a secure one. `isAllowedFaviconUrl` accepts both
    schemes and PRIVACY_POLICY.md's case 1 describes both, so this is allowed and undocumented in
@@ -326,3 +331,25 @@ The fix, if it is worth one, is a distinct message at save time for an `http:` a
 a probe result: "that address is http, so it may not load on secure pages." Not built, because
 saying it accurately needs its own verification and the case is narrow (an intranet or a local dev
 server). Raised as ROADMAP R-63.
+
+### L-38 · Two extension surfaces writing in the same instant can still lose one change · *open, inherent*
+`chrome.storage` has no transactions, so every mutation is a read-modify-write of a whole map.
+ADR-020 serialises them **within** a context, which closes the case that is actually reachable by
+clicking: two saves from one editor. Across contexts, the popup and the settings page being open
+together, there is no lock, no compare-and-swap and no transaction to use, so a window remains
+between one context's read and its write.
+
+It is now as narrow as the API allows: one read of one key, then one write of that key, with
+nothing in between, and each write touches only the key it changed, so a rule save can no longer
+revert a settings change or the reverse. Reaching what is left needs two surfaces open and two
+user actions inside the same few milliseconds.
+
+Reproduced before the fix, with a deliberate 30 ms gap standing in for the work between read and
+write: two saves, one rule left. With the queue, both survive. The residual cross-context case
+was not reproducible by hand.
+
+**If it ever needs closing:** the honest options are a single writer (route every mutation
+through the service worker, which then has to be woken and kept alive, and MV3 workers are
+explicitly not durable), or optimistic concurrency (store a version counter per key, re-read and
+retry on mismatch). Neither is worth it for a favicon rule; both are written down here so the
+next person does not have to work them out.

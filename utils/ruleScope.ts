@@ -1,5 +1,5 @@
 import { FaviconRule, MatchType } from '../types';
-import { hasExplicitScheme, suggestPrefix, suggestRegex } from './patterns';
+import { hasExplicitScheme, looksLikeHostname, suggestPrefix, suggestRegex } from './patterns';
 import { isValidRegex } from './validation';
 
 /**
@@ -164,6 +164,39 @@ const withScheme = (value: string): string => {
 };
 
 /**
+ * The exact address an `exact_url` rule should be saved with, or '' when the
+ * text cannot be one.
+ *
+ * `exact_url` compares its matcher against `location.href` with `===`, so the
+ * matcher has to be a real, canonical URL. On the settings page the target is
+ * free text, and it was stored verbatim: typing "example.com" with This Page
+ * Only saved the matcher `example.com`, which no `location.href` can ever
+ * equal. The rule sat in the list matching nothing, and the save reported
+ * success. Same story for "HTTPS://Example.com/Page", which no visit produces
+ * either, since the browser lowercases the scheme and host. ROADMAP R-64.
+ *
+ * The hostname shape is checked for the same reason `hostnameFromInput` checks
+ * it: Chrome percent-encodes illegal host characters instead of throwing, so
+ * "not a url at all" would otherwise canonicalise into a tidy-looking matcher
+ * that still matches nothing (R-49). `file:` is exempt because a file URL
+ * legitimately has no host, and the extension supports file pages.
+ *
+ * In the popup this is a no-op: the target there is `tab.url`, already
+ * canonical, so `new URL(x).href === x`.
+ */
+export const canonicalUrl = (value: string): string => {
+    const withProtocol = withScheme(value);
+    if (!withProtocol) return '';
+    try {
+        const url = new URL(withProtocol);
+        if (url.protocol !== 'file:' && !looksLikeHostname(url.hostname)) return '';
+        return url.href;
+    } catch (e) {
+        return '';
+    }
+};
+
+/**
  * The pattern we would suggest for this scope and target, ignoring any
  * override. Empty for the scopes that have no pattern field.
  */
@@ -198,7 +231,7 @@ export const patternValue = (state: ScopeState, targetUrl: string): string => {
  */
 export const matcherFor = (state: ScopeState, targetUrl: string, targetDomain: string): string => {
     if (state.scope === 'domain') return targetDomain;
-    if (state.scope === 'exact_url') return targetUrl;
+    if (state.scope === 'exact_url') return canonicalUrl(targetUrl);
     return patternValue(state, targetUrl).trim();
 };
 

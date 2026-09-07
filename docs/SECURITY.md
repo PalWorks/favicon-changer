@@ -33,6 +33,15 @@ script-src 'self'; object-src 'self'; img-src 'self' data: blob: https:;
 - `img-src` allows `data:` and `blob:` because every generated icon is a data URL and the badge
   compositor works through object URLs, plus `https:` for the "paste image URL" source and the
   options-page preview.
+- **`http:` is deliberately absent from `img-src`**, and that has visible consequences worth
+  knowing before someone "fixes" it. Measured from the options page: an `http:` image errors
+  while an `https:` one of the same size loads. So a rule whose icon is a plain `http:` address
+  saves and applies on pages (the content script is governed by the *page's* CSP, not ours), but
+  cannot be **previewed** anywhere in our own UI, and cannot be checked at save time either. The
+  preview falls back to a globe and the save makes no claim about the address. Documented for
+  users as [L-37](LIMITATIONS.md), with the option of saying something about it as R-63. Widening
+  `img-src` to `http:` to make previews work would let any rule pull an image over plaintext into
+  an extension page, which is not a trade worth making for a preview.
 - **Never add** `'unsafe-inline'` or `'unsafe-eval'`, and never widen `script-src`. Both are
   rejected in review and would make an XSS in the options page catastrophic.
 

@@ -210,7 +210,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
     };
 
     return (
-        <Accordion title="Upload Image or URL" icon="📂" isOpen={isOpen} onToggle={onToggle}>
+        <Accordion title="Upload Image or URL" icon={<svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>} isOpen={isOpen} onToggle={onToggle}>
             <div className="space-y-3">
                 {pendingImage ? (
                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -277,7 +277,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                         {/* URL Row */}
                         <div className="relative h-10 w-full">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span className="text-slate-400 text-xs">🔗</span>
+                                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                             </div>
                             <input
                                 type="text"
@@ -288,7 +288,11 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                                 className="w-full h-full border border-slate-200 bg-slate-50 rounded-lg pl-8 pr-20 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                             <button
-                                disabled={!customUrl}
+                                // isLoading as well as the empty check: this one
+                                // is a plain button rather than <Button>, so it
+                                // was the one save control a second click could
+                                // still reach mid-save (R-65).
+                                disabled={!customUrl || isLoading}
                                 onClick={handleUrlApply}
                                 className="absolute right-1 top-1.5 bottom-1.5 w-16 justify-center bg-white border border-slate-200 text-indigo-600 text-xs font-bold rounded hover:bg-slate-50 disabled:opacity-50 h-7 flex items-center"
                             >

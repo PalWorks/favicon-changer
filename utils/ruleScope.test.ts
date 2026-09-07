@@ -1,20 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INITIAL_SCOPE_STATE,
-  PATTERN_SCOPES,
-  SCOPES,
-  ScopeEvent,
-  ScopeState,
-  isPatternOverridden,
-  isPatternScope,
-  loadRuleEvent,
-  matcherFor,
-  patternErrorFor,
-  patternValue,
-  scopeHint,
-  scopeLabel,
-  scopeReducer,
-  suggestionFor,
+    INITIAL_SCOPE_STATE,
+    PATTERN_SCOPES,
+    SCOPES,
+    ScopeEvent,
+    ScopeState,
+    canonicalUrl,
+    isPatternOverridden,
+    isPatternScope,
+    loadRuleEvent,
+    matcherFor,
+    patternErrorFor,
+    patternValue,
+    scopeHint,
+    scopeLabel,
+    scopeReducer,
+    suggestionFor,
 } from './ruleScope';
 import { MATCH_TYPES } from '../types';
 
@@ -421,3 +422,61 @@ describe('suggestions for a bare host and port', () => {
   });
 });
 
+// R-64. `exact_url` compares its matcher against location.href with ===, so a
+// matcher that is not a canonical URL can never match anything. On the settings
+// page the target is free text, and it used to be stored verbatim.
+describe('canonicalUrl, and the exact_url matcher built from it', () => {
+    const exact = (text: string) => matcherFor({ scope: 'exact_url', overrides: {} }, text, '');
+
+    it('turns a bare domain into an address a visit can produce', () => {
+        expect(exact('example.com')).toBe('https://example.com/');
+    });
+
+    it('lowercases the scheme and host, as a real visit does', () => {
+        expect(exact('HTTPS://Example.COM/Page')).toBe('https://example.com/Page');
+    });
+
+    it('keeps the path, query and fragment, which are part of the address', () => {
+        expect(exact('https://example.com/a/b?x=1&y=2#frag'))
+            .toBe('https://example.com/a/b?x=1&y=2#frag');
+    });
+
+    it('leaves an address that is already canonical exactly as it is', () => {
+        // The popup path: the target is tab.url, so this must be a no-op.
+        const tabUrl = 'https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0';
+        expect(exact(tabUrl)).toBe(tabUrl);
+    });
+
+    it('refuses text that is not an address, rather than escaping it into one', () => {
+        // Chrome percent-encodes illegal host characters instead of throwing,
+        // so without the hostname check this became a tidy-looking matcher that
+        // still matched nothing (the R-49 trap, one scope over).
+        expect(exact('not a url at all')).toBe('');
+        expect(exact('...')).toBe('');
+        expect(exact('')).toBe('');
+        expect(exact('   ')).toBe('');
+    });
+
+    it('allows a file address, which legitimately has no host', () => {
+        expect(exact('file:///home/user/page.html')).toBe('file:///home/user/page.html');
+    });
+
+    it('allows a host and port, because this extension is for developers', () => {
+        expect(exact('http://localhost:3000/app')).toBe('http://localhost:3000/app');
+        expect(exact('localhost:3000/app')).toBe('https://localhost:3000/app');
+    });
+
+    it('is available on its own, and agrees with the matcher it feeds', () => {
+        expect(canonicalUrl('example.com')).toBe(exact('example.com'));
+        expect(canonicalUrl('nonsense here')).toBe('');
+    });
+
+    it('does not touch the other three scopes', () => {
+        expect(matcherFor({ scope: 'domain', overrides: {} }, 'HTTPS://Example.com/p', 'example.com'))
+            .toBe('example.com');
+        expect(matcherFor({ scope: 'prefix', overrides: { prefix: 'https://x.test/a' } }, 'irrelevant', ''))
+            .toBe('https://x.test/a');
+        expect(matcherFor({ scope: 'regex', overrides: { regex: '^https://x' } }, 'irrelevant', ''))
+            .toBe('^https://x');
+    });
+});

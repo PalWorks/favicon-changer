@@ -10,18 +10,47 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+---
+
+## [1.4.4]: 2026-09-07
+
+### Fixed
+- **A rule could go missing.** Saving two rules at almost the same moment, by clicking twice
+  quickly or by having the popup and the settings page open together, could lose one of them
+  entirely. Saving a rule could also undo a settings change made a moment earlier, and the
+  reverse. Every change is now written one at a time, and each writes only what it changed.
+- **Two rules for the same site no longer fight.** If a save produced a second rule with the same
+  scope and pattern as an existing one, the older of the two won, so your latest choice appeared
+  to be ignored. There can now only be one, and the newest wins. A duplicate pair left by an
+  older version is cleaned up the next time you save over it.
+- **"This Page Only" now understands what you type.** On the settings page, typing a site name
+  with This Page Only selected saved a rule that could never match any page, with no warning. The
+  address is completed and tidied for you now, or refused with an explanation.
+- **A busy page is no longer reported as a failure.** If a page was too busy to answer when a rule
+  was saved, the extension said it could not confirm the change. It now asks again a moment later
+  and corrects itself.
+- **The badge preview cannot show the wrong thing.** On a slow connection, moving the colour or
+  opacity controls quickly could leave the preview, and therefore the saved icon, showing an
+  older setting than the controls beside it.
+
 ### Changed
 - **The save confirmation now tells you the truth.** "Favicon updated successfully!" used to
   appear as soon as the rule was stored, whether or not anything on screen changed. It is now
   shown only when the page confirms it applied that rule. When it did not, you are told why:
-  the site is on your excluded list (with a button to take it off), another more specific rule
-  wins on that page, the image address does not load, you have no matching tab open, or the page
-  needs a reload.
+  the site is on your excluded list (with a button to take it off), another rule wins on that
+  page, the image address does not load, you have no matching tab open, or the page needs a
+  reload. Messages you need to act on stay until you dismiss them.
 - **A long rule pattern no longer fills the popup.** When the extension warns that another rule
   already wins on a page, it quotes that rule's pattern on one line instead of in full. A rule
   made for a login or sign-in URL used to wrap to dozens of lines and push the "Edit that rule
   instead" button off the bottom of the popup. The whole pattern is still there on hover and
   behind "Show the full pattern".
+- **Icons in the interface are drawn rather than typed.** The small pictures beside headings and
+  buttons were emoji characters, which look different on every operating system and are read
+  aloud by screen readers as their names. They are line icons now, and every one of them is
+  hidden from screen readers so the text beside it carries the meaning.
+- **The emoji grid and the image-address button are held while a save is in progress**, so a
+  second click cannot start a second save.
 
 ---
 

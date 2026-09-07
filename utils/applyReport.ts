@@ -180,6 +180,8 @@ export interface SaveVerification {
     targetLabel: string;
     /** False when no open tab matched, so no report was possible. */
     checkedTab: boolean;
+    /** The tab that was asked, so a silent one can be asked again. */
+    tabId?: number;
     /** The page's own account of what it did. Null when it did not answer. */
     report: ApplyReport | null;
     /** Whether a remote icon address resolved. Undefined when not checked. */
@@ -264,7 +266,12 @@ export const describeSaveOutcome = (v: SaveVerification): SaveOutcome => {
                 return {
                     kind: 'shadowed',
                     tone: 'warning',
-                    text: `Rule saved, but a more specific rule wins on ${where}, so the icon there did not change.`,
+                    // Not "a more specific rule": all that is known here is that
+                    // a different rule won. findBestRule breaks an exact tie by
+                    // keeping the earlier rule, so the winner can be an equal,
+                    // and the pre-save banner is the place that can say
+                    // "more specific" truthfully.
+                    text: `Rule saved, but another rule wins on ${where}, so the icon there did not change.`,
                 };
             }
             if (v.report.painted === false) {

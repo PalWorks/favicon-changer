@@ -9,9 +9,38 @@ interface EmojiSectionProps {
     onToggle: () => void;
     initialValues?: FaviconRule['metadata'];
     onSave: (url: string, type: 'emoji', metadata: FaviconRule['metadata']) => Promise<void>;
+    /**
+     * Locks the grid while a save is in flight. Picking an emoji IS the save
+     * here, with no Apply button to disable, so two quick clicks used to start
+     * two saves at once; one of them was then lost to the read-modify-write
+     * race in storage (ROADMAP R-65).
+     */
+    isSaving?: boolean;
 }
 
-export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, initialValues, onSave }) => {
+/**
+ * One emoji in the grid. Extracted because the grid is rendered twice, once
+ * filtered and once by category, and the two copies of this markup had to be
+ * kept identical by hand.
+ */
+const EmojiButton: React.FC<{
+    emoji: EmojiItem;
+    selected: boolean;
+    disabled?: boolean;
+    onPick: (char: string) => void;
+}> = ({ emoji, selected, disabled, onPick }) => (
+    <button
+        onClick={() => onPick(emoji.char)}
+        disabled={disabled}
+        aria-label={`Use ${emoji.keywords.split(' ')[0]} emoji`}
+        title={emoji.keywords}
+        className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40 disabled:cursor-wait ${selected ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`}
+    >
+        {emoji.char}
+    </button>
+);
+
+export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, initialValues, onSave, isSaving }) => {
     const [emojiSearch, setEmojiSearch] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>(EMOJI_LIBRARY[0].id);
     const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
@@ -82,11 +111,11 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
     }, [emojiSearch]);
 
     return (
-        <Accordion title="Select Emoji" icon="😀" isOpen={isOpen} onToggle={onToggle}>
+        <Accordion title="Select Emoji" icon={<svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} isOpen={isOpen} onToggle={onToggle}>
             <div className="flex flex-col h-[300px]">
                 <div className="mb-2 relative">
                     <input type="text" aria-label="Search emojis" placeholder="Search emojis..." value={emojiSearch} onChange={(e) => setEmojiSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500" />
-                    <span className="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                    <span className="absolute left-3 top-2.5 text-slate-400"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span>
                 </div>
                 {!emojiSearch && (
                     <div className="flex items-center gap-1 mb-2 overflow-x-auto no-scrollbar border-b border-slate-100 pb-1">
@@ -99,7 +128,13 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
                     {filteredEmojis ? (
                         <div className="grid grid-cols-6 gap-2">
                             {filteredEmojis.map((emoji, idx) => (
-                                <button key={`${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} aria-label={`Use ${emoji.keywords.split(' ')[0]} emoji`} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
+                                <EmojiButton
+                                    key={`${emoji.char}-${idx}`}
+                                    emoji={emoji}
+                                    selected={selectedEmoji === emoji.char}
+                                    disabled={isSaving}
+                                    onPick={saveEmoji}
+                                />
                             ))}
                         </div>
                     ) : (
@@ -109,7 +144,13 @@ export const EmojiSection: React.FC<EmojiSectionProps> = ({ isOpen, onToggle, in
                                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">{category.name}</h4>
                                     <div className="grid grid-cols-6 gap-2">
                                         {category.emojis.map((emoji, idx) => (
-                                            <button key={`${category.id}-${emoji.char}-${idx}`} onClick={() => saveEmoji(emoji.char)} aria-label={`Use ${emoji.keywords.split(' ')[0]} emoji`} className={`text-2xl h-10 w-10 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors ${selectedEmoji === emoji.char ? 'bg-indigo-50 ring-2 ring-indigo-500' : ''}`} title={emoji.keywords}>{emoji.char}</button>
+                                            <EmojiButton
+                                                key={`${category.id}-${emoji.char}-${idx}`}
+                                                emoji={emoji}
+                                                selected={selectedEmoji === emoji.char}
+                                                disabled={isSaving}
+                                                onPick={saveEmoji}
+                                            />
                                         ))}
                                     </div>
                                 </div>

@@ -32,6 +32,15 @@ export const APPLY_REPORT_TIMEOUT_MS = 1200;
 // one simply produces no claim either way.
 export const ICON_PROBE_TIMEOUT_MS = 1500;
 
+// The second, unhurried ask for a tab that did not answer the first one. A page
+// whose main thread is blocked cannot run its message handler at all, and
+// blocking for over a second is ordinary on a heavy site mid-load: measured, a
+// page busy for 3s reports "did not confirm" and then applies the rule anyway.
+// Nobody waits on this one, so it can afford to be patient, and if it answers
+// the status line is corrected. Long enough to outlast a typical hitch, short
+// enough that the promise and its closure do not linger.
+export const LATE_APPLY_REPORT_TIMEOUT_MS = 4000;
+
 // How much of a rule's matcher to show when it is quoted inside a sentence.
 // A matcher can be a whole URL, and a real one on a login or OAuth page runs to
 // hundreds of characters of query string: quoting one in full filled the entire

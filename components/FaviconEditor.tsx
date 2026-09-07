@@ -106,6 +106,21 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({
                                     </button>
                                 )}
                             </div>
+                            {/* A confirmation clears itself after two seconds; a
+                                warning stays, because it is the only place the
+                                user is told the change is not visible yet and
+                                some of them carry a button. On the settings
+                                page, which is long-lived, that needs a way out
+                                other than saving something else. */}
+                            <button
+                                onClick={() => editor.setStatusMessage(null)}
+                                aria-label="Dismiss this message"
+                                className="shrink-0 -mr-1 -mt-1 rounded p-1 opacity-60 hover:opacity-100"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
                         </div>
                     )}
 
@@ -225,6 +240,7 @@ export const FaviconEditor: React.FC<FaviconEditorProps> = ({
                             onToggle={() => editor.toggleSection('emoji')}
                             initialValues={initialRule?.metadata}
                             onSave={editor.handleSave}
+                            isSaving={isSaving}
                         />
 
                         <BadgeSection

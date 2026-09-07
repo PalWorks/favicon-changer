@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Favicon Changer Ultimate",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Customize any site's favicon with emojis, image uploads, or badges & overlays. Per-site rules, local processing, no tracking.",
   "permissions": [
     "storage",

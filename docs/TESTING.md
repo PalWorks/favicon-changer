@@ -17,7 +17,7 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **302 tests across 12 files**, run time under two seconds.
+Current coverage: **392 tests across 14 files**, run time under two seconds.
 
 | File | Covers |
 |---|---|
@@ -188,6 +188,9 @@ Found while running the 2026-09-07 audit. Every one of these looked like a produ
 | **Two banners share `role="status"`** | The conflict warning and the save outcome are both `role="status"`, so a harness that joins them reads the conflict banner (which is up before the save) and never waits for the outcome | Filter the conflict banner out by its heading, or address the save outcome specifically |
 | **An extension page cannot load `http:`** | Under MV3 an insecure subresource is refused, so an `<img>` probe of any `http:` address errors whatever is there. Measured: `http://127.0.0.1:8899/blue.png` errors while an `https:` image loads | Probe `https:` only, in an extension page. This one was a product defect first, found only by running it (L-37) |
 | **Chrome will not discard the active tab** | `chrome.tabs.discard` throws "Cannot discard tab with id", and discarding also **changes the tab's id** | Activate a sibling in the same window, wait for `active` to settle, then discard; re-query by URL afterwards rather than reusing the id |
+| **A synchronous storage stub hides the worst bug class** | `chrome.storage` has no transactions, so an unserialised read-modify-write loses a change. With an instant stub the two operations never overlap and the test passes on broken code | Defer the stub's `get` and `set` by a turn (`storage.test.ts`), then assert on `Promise.all` of two mutations. This is what R-65's regression test rests on |
+| **`getStorageData` does not await its own latch write** | The migration latch is written fire-and-forget, on purpose, so the first read is not held up. A test asserting on what was *persisted* right after it reads nothing | Await a turn before asserting on `store.migrated`. Anything asserting on the returned value needs no wait |
+| **A page can be too busy to answer** | A blocked main thread cannot run a content script's message handler at all, so a save reads as unconfirmed. Measured: 3s of busy loop | Real behaviour, not a harness trap, but it will look like one. `Runtime.evaluate` a busy loop to reproduce it deliberately; the late retry (R-66) is what corrects the message |
 
 Table name: **testing-harness-traps**
 
@@ -205,7 +208,7 @@ What can be automated without loading the extension at all, and is worth doing f
 - `node --check dist/*.js` to catch a broken bundle, and a grep of `dist/content.js` to confirm
   it is still a self-contained IIFE with no bare `import`.
 
-Items 1 to 7 below have all been run this way against a real Chrome. Items 8 to 12 still need
+Items 1 to 8 below have all been run this way against a real Chrome. Items 9 to 13 still need
 hands: they involve the OS file dialog, drag and drop, or two extension surfaces open at once.
 
 ---
@@ -213,8 +216,8 @@ hands: they involve the OS file dialog, drag and drop, or two extension surfaces
 ## What a change must be tested against manually
 
 `npm run build`, reload unpacked, then walk this list. These are the cases that have actually
-broken before, in the order they broke. Items 1 to 7 can be driven over the DevTools protocol as
-described above; 8 to 12 cannot.
+broken before, in the order they broke. Items 1 to 8 can be driven over the DevTools protocol as
+described above; 9 to 13 cannot.
 
 1. **Active tab**, apply an emoji rule; the tab icon changes immediately.
 2. **Background tab**, apply a rule to a page in a *non-focused* tab; its icon must change
@@ -226,19 +229,23 @@ described above; 8 to 12 cannot.
    site's own icon is intact. ADR-002.
 5. **An excluded domain**, add it in options; the page must be inert even with a matching rule.
 6. **Rule deletion**, the original favicon comes back on the affected tabs.
-7. **What the save says it did** (ADR-019). With a matching tab open, saving must report
+7. **Two saves at once.** Click two different emoji as fast as possible: exactly one rule must
+   exist afterwards, carrying the second emoji. Then open the popup and the settings page
+   together and save from one while the other is open: nothing either of them wrote may vanish
+   (ADR-020, L-38).
+8. **What the save says it did** (ADR-019). With a matching tab open, saving must report
    "updated successfully"; with the site excluded, it must say so and offer "Remove from
    excluded", and pressing that must re-check and then confirm; with a more specific rule
    already winning, it must say the icon did not change; with no matching tab open, it must say
    the rule is waiting. A dead `https:` image address must be reported, a working one must not.
    All driveable over the DevTools protocol.
-8. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
+9. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
    survives; the file must apply to the tab the popup was opened from. ADR-007.
-9. **Drag-and-drop upload in the bubble**, works on every OS with no hand-off.
-10. **An SVG favicon site** (github.com), export the original, re-upload the exported file; it
+10. **Drag-and-drop upload in the bubble**, works on every OS with no hand-off.
+11. **An SVG favicon site** (github.com), export the original, re-upload the exported file; it
    must decode rather than showing a broken image. This is what `normalizeImageDataUrl` guards.
-11. **Import/export round trip**, export, delete all rules, re-import, rules return.
-12. **Options ⇄ popup live sync**, with both open, a change in one appears in the other.
+12. **Import/export round trip**, export, delete all rules, re-import, rules return.
+13. **Options ⇄ popup live sync**, with both open, a change in one appears in the other.
 
 ---
 

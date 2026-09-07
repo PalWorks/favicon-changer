@@ -32,8 +32,8 @@ Work down this tree; each step is cheap and rules out a whole class.
 | 2 | Is the URL `chrome://`, `chrome-extension://`, `edge://`, `about:`, `view-source:`, or the Web Store? | Chrome forbids content scripts there. Unfixable, not a bug. |
 | 3 | Is it a `file://` URL? | Needs **Allow access to file URLs** on the extension card. |
 | 4 | Was the rule scoped **This Page Only**? | `exact_url` is byte-exact including `?query` and `#hash`. The single most common cause. Re-scope to **Entire Domain**. |
-| 5 | Does a higher-precedence rule exist for the page? | `exact_url` > `regex` > `domain`. The popup shows an orange conflict banner for the domain case. Check the rules list in settings. |
-| 6 | Two rules of the **same** type both match? | The oldest wins, not the most specific, a known defect. Delete the broader rule. |
+| 5 | Does a higher-precedence rule exist for the page? | `exact_url` > `prefix` > `regex` > `domain`, and within one type the longer matcher wins (ADR-013). The editor shows an orange conflict banner before the save, and the save itself now says "another rule wins on this page" afterwards. Check the rules list in settings. |
+| 6 | Two rules of the **same** type both match? | The longer, more specific matcher wins (R-04). Two rules with the *identical* type and matcher can no longer exist: a save collapses them (ADR-020). A pair from an older build is repaired the next time either is saved. |
 | 7 | Was the tab open **before** the rule was created? | It should update without a reload. If it does not, get the `[Content]` logs, this is ADR-001 territory and a real bug. |
 | 8 | Is a **global fallback favicon** set in settings? | It applies to every page with no matching rule, which users mistake for "the extension went rogue". |
 | 9 | Did the icon change and then revert a second later? | The page is fighting us. Look for repeated `Detected external change, re-applying` lines. |
@@ -63,6 +63,23 @@ Almost always the OS popup-blur problem, see [DECISIONS.md](DECISIONS.md) ADR-00
   `Retrying image with corrected MIME type` followed by another failure, get the file.
 - A transparent PNG previewed against the checkerboard is correct, not broken.
 
+## "It says it saved but the icon did not change"
+
+Since 1.4.4 the save reports what the page actually did, so the message *is* the triage. In order
+of what it can say:
+
+| Message | Meaning |
+|---|---|
+| Favicon updated successfully | The page confirmed it applied that exact rule. If the tab strip still looks wrong, it is a rendering question, not a rule question: go to the table above, item 9. |
+| ...is on your excluded list | Exclusion beats every rule. The message carries a button to remove it. |
+| ...another rule wins on... | A different rule owns that page. The rules list in settings shows which. |
+| ...did not confirm the change | We got no answer from the page. Usually a tab open since before an update (reload it), a busy page (the message corrects itself if the page frees up), or a page we may not script. |
+| ...will apply the next time you open a matching page | No matching tab was open, so nothing could be checked. Not an error. |
+| ...that image address did not load | A pasted `https:` image address that does not resolve. An `http:` address is never checked at all and cannot be previewed either, see L-37. |
+| ...reports that no rule matches it / showing your fallback icon | The rule was saved but does not cover the page it was made for. Check the pattern. |
+
+Table name: **runbook-save-messages**
+
 ## "Badges don't work on this site"
 
 The badge tool fetches the site's current favicon to composite onto. If the site has no favicon
@@ -75,8 +92,13 @@ Look for a rapid repeat of `[Content] Detected external change, re-applying`, a 
 with a page that reasserts its own icon. Get the URL; it needs a site-specific look. Immediate
 mitigation for the user: add the domain to **Excluded Sites**.
 
-## "All my rules disappeared"
+## "All my rules disappeared" or "the rule I just made is not there"
 
+- **One rule missing rather than all of them** was a real defect until 1.4.4. Two storage writes
+  at once lost one of them outright, reachable by clicking twice quickly or by having the popup
+  and the settings page open together. Fixed by ADR-020; if a report predates 1.4.4, this is very
+  likely the cause and the answer is to update and re-create the rule. A residual cross-context
+  window remains (L-38) and needs two surfaces and two actions in the same instant.
 - Check whether they are signed into a different Chrome profile, storage is per-profile and
   **not** synced across devices, by design (ADR-004).
 - `chrome.storage.local` is cleared if the extension is removed and reinstalled.

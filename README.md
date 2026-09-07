@@ -7,24 +7,24 @@ A Chrome Manifest V3 extension. No backend, no accounts, no analytics, every ico
 and stored on your own device.
 
 [**Chrome Web Store**](https://chromewebstore.google.com/detail/egedbdckafdbomehjaihjhbcgmngmlah) ·
-983 users · 4.4 ★
+1,000 users · 4.5 stars
 
 ---
 
 ## Features
 
-- **🎨 Custom uploads**: any PNG, JPEG, SVG or WebP, with fit / fill / stretch framing.
-- **😀 Emoji**: a searchable, categorised emoji library rendered straight to an icon.
-- **🏷️ Badges and overlays**: text badges and colour washes composited over a site's real icon.
-- **📂 Four ways to match**: a whole domain, one exact URL, a **URL prefix** (one document across
+- **Custom uploads**: any PNG, JPEG, SVG or WebP, with fit / fill / stretch framing.
+- **Emoji**: a searchable, categorised emoji library rendered straight to an icon.
+- **Badges and overlays**: text badges and colour washes composited over a site's real icon.
+- **Four ways to match**: a whole domain, one exact URL, a **URL prefix** (one document across
   all its views), or a **regular expression**. Plus an exclusion list for sites you want left
   alone entirely.
-- **🎯 Pattern help**: prefix and regex rules are prefilled from the page you are on, and the
+- **Pattern help**: prefix and regex rules are prefilled from the page you are on, and the
   editor shows live how many of your open tabs a pattern would match before you save it.
-- **⚡ Auto-compression**: icons are downscaled and compressed to fit the browser storage quota.
-- **🔁 Import / export**: back up or share your rules as JSON.
-- **🐞 Support logs**: opt-in verbose logging you can download and send when something breaks.
-- **✉️ Get help**: one click on the settings page composes a mail with your extension version,
+- **Auto-compression**: icons are downscaled and compressed to fit the browser storage quota.
+- **Import / export**: back up or share your rules as JSON.
+- **Support logs**: opt-in verbose logging you can download and send when something breaks.
+- **Get help**: one click on the settings page composes a mail with your extension version,
   browser and rule count already filled in. It opens in your own mail app; nothing is sent until
   you press send.
 
@@ -90,7 +90,7 @@ Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 npm install
 npm run dev        # Vite dev server, React UI only, with a localStorage storage shim
 npm run build      # two-pass production build into dist/
-npm test           # 302 unit tests (vitest)
+npm test           # 392 unit tests (vitest)
 npm run check      # type check + tests, the quick gate
 npm run typecheck  # tsc --noEmit alone, not part of the build
 ```

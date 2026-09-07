@@ -51,7 +51,7 @@ export const DebugLogs: React.FC = () => {
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                    <span className="text-xl">🐞</span> Debug Logs
+                    <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a7 7 0 1114 0v3a5 5 0 01-5 5h-4a5 5 0 01-5-5v-3z" /></svg> Debug Logs
                 </h2>
                 <Button size="sm" variant="ghost" onClick={() => setShowLogs(!showLogs)}>
                     {showLogs ? 'Hide Logs' : 'Show Logs'}
@@ -98,13 +98,13 @@ export const DebugLogs: React.FC = () => {
 
                     <div className="flex gap-2">
                         <Button size="sm" onClick={handleCopyLogs} className="flex-1">
-                            📋 Copy
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> Copy
                         </Button>
                         <Button size="sm" onClick={() => logger.downloadLogs()} className="flex-1 bg-slate-700 hover:bg-slate-800 text-white">
-                            💾 Download
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg> Download
                         </Button>
                         <Button size="sm" variant="secondary" onClick={handleClearLogs} className="flex-1 text-red-600 hover:bg-red-50">
-                            🗑️ Clear
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg> Clear
                         </Button>
                     </div>
                 </div>

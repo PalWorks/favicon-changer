@@ -68,6 +68,39 @@ describe('probeIconUrl', () => {
         await expect(pending).resolves.toBe(true);
     });
 
+    it('makes no claim while the browser reports no network', async () => {
+        // An error event with no network says nothing about the address, and
+        // "that image address did not load" would be the same confident wrong
+        // answer this whole mechanism exists to remove.
+        let made = 0;
+        const result = await probeIconUrl('https://cdn.example.com/icon.png', {
+            online: false,
+            makeImage: () => { made++; return fake(); },
+        });
+        expect(result).toBeUndefined();
+        expect(made).toBe(0);
+    });
+
+    it('assumes there is a network when nothing says otherwise', async () => {
+        // The default must be to probe. An environment that does not implement
+        // navigator.onLine must not be read as being offline, or the check
+        // would silently disable itself.
+        const image = fake();
+        const pending = probeIconUrl('https://cdn.example.com/icon.png', { makeImage: () => image });
+        await tick();
+        expect(image.src).toBe('https://cdn.example.com/icon.png');
+        image.onload?.();
+        await expect(pending).resolves.toBe(true);
+    });
+
+    it('probes when the browser reports a network', async () => {
+        const image = fake();
+        const pending = probeIconUrl('https://cdn.example.com/icon.png', { online: true, makeImage: () => image });
+        await tick();
+        image.onload?.();
+        await expect(pending).resolves.toBe(true);
+    });
+
     it('says nothing when the page has no Image constructor at all', async () => {
         // The unit-test environment is exactly this case, and so is any caller
         // outside a document. It must decline to guess rather than throw.

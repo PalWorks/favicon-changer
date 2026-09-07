@@ -22,7 +22,7 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 57 | Shipped and verified, latest 2026-09-07: the 11 findings of the pre-release audit, then R-61 and R-62 |
+| Done | 61 | Shipped and verified, latest 2026-09-07: the pre-release audit's 11, then R-61 and R-62, then the master audit's R-64 to R-67 |
 | Next up | 1 | R-63 only, and it needs a decision rather than a keyboard. Everything else built is verified and packaged |
 | Paused | 4 | R-22, R-23, R-24 and R-39, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
@@ -96,6 +96,10 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-15 | Extract the editor's logic into a hook | M | (2026-09-07) 771 lines down to 213 of markup over a hook and a pure reducer. An unedited pattern is now derived, not stored (ADR-016), which removed two pieces of state, one effect, and a corruption bug in "Edit that rule instead" reproduced in a real browser against both builds. 52 new tests |
 | R-49 | A junk domain rule could be saved | S | (2026-09-07) Chrome percent-encodes illegal host characters where Node throws, so "not a url at all" saved a rule that could match nothing. Hostname shape is checked now, and `localhost:3000` reads as a host and port rather than a scheme |
 | R-61 | "Favicon updated successfully!" was claimed, never verified | M | (2026-09-07) The message was printed when the storage write resolved. Four cases ended with a green tick and no visible change, one of which no reload could fix. The page now reports what it did and the status line says only that. 64 unit tests, 25 of 25 mutants killed, and 28 live checks in a real Chrome (ADR-019) |
+| R-64 | An exact-URL rule could be saved as text no page can produce | S | (2026-09-07) Typing a bare domain with This Page Only saved the matcher `example.com`, which no `location.href` can equal, so the rule sat in the list matching nothing. The matcher is canonicalised now, or refused with a message |
+| R-65 | Two storage writes at once lost one of them | M | (2026-09-07) Every mutation was a read-modify-write of a whole map with no serialisation, so a rule could be **lost**, not duplicated. Reproduced in a real browser. Mutations now queue, write only their own key, and collapse a duplicate matcher. 15 new tests (ADR-020) |
+| R-66 | A busy page was reported as unconfirmed | S | (2026-09-07) A page whose main thread is blocked cannot answer inside the budget, so a save that did apply was reported as needing a reload. Measured at 3s of block. One late retry now corrects the message |
+| R-67 | The badge preview could be overtaken by an older fetch | S | (2026-09-07) The preview effect fetches the page's icon and had no ordering guard, so on a slow link a stale composition could win and be the one Apply saved, disagreeing with the controls beside it |
 | R-62 | A long matcher filled the whole popup | S | (2026-09-07) The conflict warning quoted the winning rule's matcher inline with `break-all`. A real Facebook auth URL wrapped to 25 lines at popup width and pushed "Edit that rule instead" a screen below the fold, so the warning stated the problem and hid the fix. One line now, 15px instead of 375px, with the full value on hover and behind a toggle |
 
 Table name: **roadmap-done**
@@ -1252,6 +1256,83 @@ address is http, so it may not load on secure pages", which needs its own verifi
 mixed-content handling before it can be stated as fact. (c) Refuse `http:` in
 `isAllowedFaviconUrl`, which would break existing rules and existing imports and is out of
 proportion. **Recommendation: (b), or (a) if nobody reports it.** Not (c).
+
+### R-64 · An exact-URL rule could be saved as text no page can produce · **S** · ✅ done 2026-09-07
+Found by reading `matcherFor` against what `exact_url` actually compares. The matcher goes into a
+`===` against `location.href`, and on the settings page the target is free text that was stored
+verbatim. So "This Page Only" plus `example.com` saved the matcher `example.com`: a string no
+address bar can ever produce. The rule appeared in the list, looked right, and matched nothing.
+`HTTPS://Example.com/Page` did the same, since a real visit lowercases the scheme and host.
+
+Reproduced in the browser before the fix, and the save even reported "It will apply the next time
+you open a matching page", which was true only in the sense that the day would never come.
+
+`canonicalUrl()` now normalises the text through the URL parser (`example.com` becomes
+`https://example.com/`) and returns '' for anything that cannot be an address, which routes into
+the same "tell the user" path the domain scope has used since R-49. The hostname shape is checked
+for the R-49 reason: Chrome percent-encodes illegal host characters rather than throwing, so
+"not a url at all" would otherwise have canonicalised into a tidy matcher that still matched
+nothing. `file:` is exempt, since a file URL has no host and the extension supports file pages.
+In the popup it is a no-op: the target there is `tab.url`, already canonical. 11 new tests.
+
+### R-65 · Two storage writes at once lost one of them · **M** · ✅ done 2026-09-07
+The most serious finding of the audit, and the only one whose symptom is a rule the user is sure
+they created simply not existing.
+
+`chrome.storage` has no transactions and every mutation was a read-modify-write of a whole map,
+unserialised. Two at once means the second read happens before the first write, so the first
+change is gone. **Reproduced in a real browser**: two saves started together, one rule left where
+there should have been two.
+
+Three ways to reach it, all real:
+
+- **Two quick clicks in the editor.** Picking an emoji IS the save; there is no Apply button to
+  disable, so two clicks start two saves. Depending on the interleaving, either one rule vanished
+  or two rules existed for one matcher, and `findBestRule` breaks an exact tie by keeping the
+  **earlier** rule, so the user's second choice lost silently.
+- **The popup and the settings page open together**, which the product supports.
+- **Writes carrying keys nobody changed.** `persistData` wrote `rules` *and* `settings` on every
+  mutation, from whatever it had read a moment earlier, so saving a rule could revert a
+  concurrent settings change and saving a setting could revert a rule. No race between two rule
+  writes was needed for that one at all.
+
+Fixed in three parts, all in [utils/storage.ts](utils/storage.ts): a per-context queue every
+mutation passes through, single-key writes, and `(matchType, matcher)` treated as a rule's
+identity so a save over an existing pair collapses it (keeping the newer icon, the earlier
+`createdAt`, and repairing duplicates already in storage). The emoji grid and the "paste image
+URL" button are now disabled while a save is in flight, which stops the trigger as well as the
+consequence. What is left, two *different* contexts inside the same few milliseconds, cannot be
+fixed without a lock the API does not offer; it is L-38, with the two honest options written out.
+Decision recorded as [ADR-020](docs/DECISIONS.md). 15 new tests, including one that asserts ten
+simultaneous saves all survive, over a deliberately deferred storage stub, since a synchronous
+one passes on the broken code.
+
+### R-66 · A busy page was reported as unconfirmed · **S** · ✅ done 2026-09-07
+A consequence of R-61 found by testing R-61's own weak point. A page whose main thread is blocked
+cannot run its message handler, so it cannot answer the confirmation request inside the budget,
+and the save was reported as "did not confirm the change. Reload it to see the new icon." while
+the page went on to apply the rule the moment it was free. Measured with a deliberate 3s busy
+loop: unconfirmed, then the icon changed anyway.
+
+Raising the budget was the wrong lever: every genuinely dead tab would then make the user wait.
+Instead the first answer is shown at once, and if the tab said nothing, it is asked **once** more
+on a longer budget with nobody waiting on it; if that answers, the banner is corrected. Verified
+end to end: the two messages appear in order, "did not confirm" and then "Favicon updated
+successfully!". A run counter makes sure a late answer can never overwrite the result of a save
+the user made after it.
+
+### R-67 · The badge preview could be overtaken by an older fetch · **S** · ✅ done 2026-09-07
+Found by looking for effects that set state after an `await` with no cancellation. The badge and
+overlay preview fetches the page's own favicon, and its effect re-runs on every change to the
+mode, colour, opacity, text and position. Nothing ordered the responses, so on a slow link an
+older fetch could finish last and leave the preview showing a setting the controls no longer
+show. Apply saves `previewUrl` and reads the metadata from current state, so the icon and the
+metadata stored on the rule could disagree, and re-opening the rule would show controls that did
+not describe its icon.
+
+A `superseded` flag set by the effect's cleanup now discards a response whose settings are no
+longer current. Found by reading rather than by reproducing: the fetch is normally cached and
+instant, so a reproduction needs both a slow link and a fast hand.
 
 ---
 
