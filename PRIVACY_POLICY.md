@@ -16,6 +16,13 @@ Favicon Changer Ultimate ("we", "our", or "us") is committed to protecting your 
   plus the last such date and whether you have already answered. This is a number in your
   browser's local storage on your device. It is never sent anywhere, it records no addresses and
   no page information, and dismissing the prompt stops the counting for good.
+- **Contacting support**: The "Get help" action on the settings page opens a draft mail in your
+  own mail application. The draft contains the extension version, your browser and its version,
+  your operating system string, how many rules you have and whether verbose logging is switched
+  on. Those details are shown to you on the page before you send, they are exactly what the draft
+  contains, and nothing is sent anywhere unless you press send in your own mail app. The extension
+  makes no request of its own for this, attaches no logs by itself, and asks for no phone number.
+  If you do choose to write to us, we receive the mail you sent and nothing else.
 
 ## Network Requests
 The extension makes no network requests of its own accord. There are exactly three cases in which your browser fetches something on the extension's behalf, all of them a direct result of something you did:

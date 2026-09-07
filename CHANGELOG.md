@@ -14,6 +14,13 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [1.4.3]: 2026-09-07
 
+### Added
+- **Get help.** A "Contact support" action on the settings page opens a mail in your own mail app,
+  already carrying the extension version, your browser, the platform and how many rules you have,
+  so a bug report does not start with three questions back. Nothing is sent until you press send,
+  and the details are shown on the page so you can see exactly what is included. "Copy
+  diagnostics" gives you the same block if you would rather use webmail.
+
 ### Fixed
 - **"Edit that rule instead" edited the wrong rule.** On the warning that another rule takes
   precedence, the button that offers to edit that rule instead dropped you into editing a *wider*

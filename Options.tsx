@@ -7,6 +7,7 @@ import { FaviconEditor } from './components/FaviconEditor';
 import { GlobalSettings } from './components/options/GlobalSettings';
 import { RulesList } from './components/options/RulesList';
 import { DebugLogs } from './components/options/DebugLogs';
+import { SupportSection } from './components/options/SupportSection';
 import { RatingPrompt } from './components/RatingPrompt';
 import './index.css';
 
@@ -151,6 +152,8 @@ const OptionsApp: React.FC = () => {
                                 onDeleteMany={handleDeleteMany}
                                 onToggleEnabled={handleToggleEnabled}
                             />
+
+                            <SupportSection ruleCount={rules.length} />
 
                             <DebugLogs />
                         </div>

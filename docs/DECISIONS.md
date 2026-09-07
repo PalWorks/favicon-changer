@@ -397,3 +397,48 @@ when it would change something instead of always.
 times per render through `matcherFor` and `patternErrorFor`. Measured in microseconds on a control
 that renders on keystrokes; not worth memoising, and worth much less than the correctness.
 
+
+---
+
+## ADR-017: Support is a prefilled mail from the user's own client, not a form we host
+**Status**: Accepted · 2026-09-07
+
+**Decision.** "Get help" on the settings page composes a `mailto:` to support@palworks.ai with the
+subject and body already carrying the extension version, the browser and its major version, the
+platform, the rule count and whether verbose logging is on, plus instructions for attaching a log.
+The composition lives in [utils/support.ts](../utils/support.ts) and is tested there. There is no
+form, no endpoint, and no request the extension makes.
+
+**Why.** The thing missing from support today is not a channel, since the store listing already
+provides one. It is that a report arrives with no version, no browser build and no reproduction, so
+the first reply is always a request for those. A prefilled mail fixes exactly that, and costs
+nothing else:
+
+- **No key.** A hosted form needs a credential to send mail, and a published extension is a public
+  archive: anyone can unzip the CRX and read it. See [SECURITY.md](SECURITY.md).
+- **No promise to rewrite.** The listing, the README and the privacy policy all say there is no
+  server and nothing is collected. A form posting a name, an address and attachments to
+  infrastructure we run would make that untrue, would have to be declared in the store's data
+  disclosure as personally identifiable information and user communications, and would be material
+  enough to expect a re-review.
+- **No abuse surface.** An unauthenticated send endpoint is a spam cannon, and the obvious control
+  (a third-party challenge script) would mean widening `script-src 'self'`. Weakening the CSP to
+  fight spam the feature itself created is a poor trade.
+- **No phone number**, in either shape. Nothing here telephones anyone, it is the field most
+  likely to stop someone submitting, and it is regulated personal data held for no purpose.
+
+**What it cannot do.** Attach the log automatically, or look like anything but a mail draft. The
+body therefore tells the user how to attach one, and adapts: a user who already has verbose
+logging on is not told to turn it on.
+
+**Also.** The composed URL is capped at 2000 characters, since some clients truncate a long
+`mailto:` silently rather than refusing it. Only the user agent is unbounded, so that is the field
+shortened, and the browser and version are on their own derived line precisely so nothing of value
+is lost when it is. The diagnostics are rendered on the page as well as sent, and the copy button
+hands back the same block, so nobody has to trust a description of what is included and nobody
+without a configured mail client is stuck.
+
+**If reversed.** A hosted form is a separate decision, taken on evidence that these mails are
+still unusable, and it carries a privacy policy change and a store data disclosure with it rather
+than after it. The Resend CLI authenticated on the maintainer's machine is not a route to this: it
+lets a person send mail, not the extension.

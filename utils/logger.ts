@@ -4,7 +4,10 @@
  */
 
 const LOG_KEY = 'debug_logs';
-const LOG_ENABLED_KEY = 'enable_debug_logging';
+// Exported so a reader can watch it on storage.onChanged rather than polling
+// (the support mail states whether logging is on, and a stale answer there
+// sends the user the wrong instructions).
+export const LOG_ENABLED_KEY = 'enable_debug_logging';
 
 // Ring buffer size for the persisted log.
 const MAX_LOG_LINES = 1000;

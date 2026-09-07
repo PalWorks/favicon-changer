@@ -22,6 +22,7 @@ question.
 | What changed in each version? | [CHANGELOG.md](CHANGELOG.md) |
 | What are the threats, permissions and CSP rules? | [docs/SECURITY.md](docs/SECURITY.md) |
 | What do we tell users about their data? | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) |
+| How do I submit this to a store? | [docs/PUBLISHING.md](docs/PUBLISHING.md) |
 
 Table name: **docs-by-question**
 
@@ -43,6 +44,7 @@ Table name: **docs-by-question**
 | Options page | [Options.tsx](Options.tsx), [components/options/](components/options/) | ARCHITECTURE §1 |
 | Logging | [utils/logger.ts](utils/logger.ts) | ADR-009, RUNBOOK, SECURITY data rule 4 |
 | Review prompt policy | [utils/rating.ts](utils/rating.ts), [components/RatingPrompt.tsx](components/RatingPrompt.tsx) | ADR-015, ROADMAP R-47 |
+| Support mail composition | [utils/support.ts](utils/support.ts), [components/options/SupportSection.tsx](components/options/SupportSection.tsx) | ADR-017, ROADMAP R-46 |
 | Build | [vite.config.ts](vite.config.ts), [vite.content.config.ts](vite.content.config.ts) | ARCHITECTURE §2, ADR-006 |
 | Manifest, permissions, CSP | [public/manifest.json](public/manifest.json) | SECURITY |
 | Types and tuning constants | [types.ts](types.ts), [constants.ts](constants.ts) | DOMAIN §1 |

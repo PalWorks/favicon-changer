@@ -43,7 +43,7 @@ export const DebugLogs: React.FC = () => {
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                    <span className="text-xl">🐞</span> Debug Logs & Support
+                    <span className="text-xl">🐞</span> Debug Logs
                 </h2>
                 <Button size="sm" variant="ghost" onClick={() => setShowLogs(!showLogs)}>
                     {showLogs ? 'Hide Logs' : 'Show Logs'}
@@ -70,7 +70,7 @@ export const DebugLogs: React.FC = () => {
                     </div>
 
                     <p className="text-xs text-slate-500">
-                        If you encounter issues, please download these logs and send them to support.
+                        Download the log and attach it to a support mail. Use Get help above to compose one with the version details already filled in.
                     </p>
 
                     <div role="log" aria-label="Debug log output" className="bg-slate-900 rounded-lg p-3 h-48 overflow-y-auto font-mono text-[10px] text-green-400 leading-relaxed relative">
