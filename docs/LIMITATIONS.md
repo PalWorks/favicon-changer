@@ -207,7 +207,7 @@ call-graph glance, but was wired to a visible button. Confirm against the JSX, n
 
 ## 6. Platform and reach
 
-### L-20 · Chrome/Chromium only → **R-23**
+### L-20 · Chrome/Chromium only → **R-23**, *paused by decision 2026-09-07 (ADR-018)*
 MV3 service worker, `chrome.action`, and `chrome.*` globals throughout.
 
 **Corrected 2026-09-07 by testing rather than reasoning.** Edge is Chromium and takes the same
@@ -218,10 +218,13 @@ needed is two manifest lines (`background.scripts` instead of `background.servic
 `browser_specific_settings.gecko.id`). See ROADMAP R-23 for what was measured and what is still
 untested, and [PUBLISHING.md](PUBLISHING.md) for the submissions themselves.
 
-### L-21 · English only → **R-22**
-No `_locales`, every string inline in TSX. 983 users with no localisation ceiling lifted.
+### L-21 · English only → **R-22**, *paused by decision 2026-09-07 (ADR-018)*
+No `_locales`, every string inline in TSX. 983 users with no localisation ceiling lifted. Sized on
+2026-09-07 at about 114 UI strings plus 693 emoji search keywords, then deferred: English only for
+now, and non-English users see English. Not a defect, and not to be filed as one. R-22 carries the
+plan and the trigger for restarting it.
 
-### L-22 · No cross-device sync → **R-24**, *and partly by design*
+### L-22 · No cross-device sync → **R-24**, *paused by decision 2026-09-07 (ADR-018), and partly by design*
 `chrome.storage.local` is per-profile per-device. `storage.sync` cannot be swapped in: its ~8 KB
 per-item limit cannot hold a PNG data URL (ADR-004). Real sync needs a different icon-storage
 design, not a one-line change. Export/import JSON is the current answer.

@@ -442,3 +442,38 @@ without a configured mail client is stuck.
 still unusable, and it carries a privacy policy change and a store data disclosure with it rather
 than after it. The Resend CLI authenticated on the maintainer's machine is not a route to this: it
 lets a person send mail, not the extension.
+
+---
+
+## ADR-018: Chrome Web Store only, English only, for now
+**Status**: Accepted · 2026-09-07
+
+**Decision.** The product ships to the Chrome Web Store and in English. Internationalisation
+(R-22), the Firefox and Edge listings (R-23) and cross-device sync (R-24) are **paused**: planned
+in full, deliberately not started. Store screenshots (R-39) are wanted but do not block a release.
+
+**Why.** All three are reach or convenience projects, and each was sized honestly before being
+deferred rather than being deferred because it looked hard:
+
+- **i18n is a week whose payoff cannot be measured yet.** 114 UI strings plus 693 emoji keywords.
+  The useful order is extract to `en`, then translate the store listing, then add two or three
+  languages that somebody can actually verify. Nothing in the dashboard yet says which language
+  that would be, and a mistranslated "prefix", "regex" or "matcher" is worse than English because
+  the user cannot tell it is wrong.
+- **A second store is a second listing to keep in step for ever.** Not the submission, which is a
+  day, but the ongoing duplication: two privacy disclosures, two review queues, two sets of
+  release notes. Worth paying when there is a reason to be there, not by default.
+- **Sync trades the product's central claim for a convenience that export and import already
+  cover** for the "I set up a new laptop" case, which is the case people actually have.
+
+**Consequences, stated so nothing is quietly assumed.** Non-English users see English. The
+extension is Chrome and Chromium only in practice, even though Firefox has been verified to work.
+Rules do not follow a user between devices, and the settings page's export and import remain the
+answer. None of these is a defect and none should be filed as one.
+
+**If reversed.** Each plan is written and current: ROADMAP R-22, R-23 and R-24 carry the design,
+the open questions and the measurements, and [PUBLISHING.md](PUBLISHING.md) carries both store
+submissions step by step with the listing copy drafted. Restarting one is picking up a plan, not
+writing it. The trigger for R-22 is an install breakdown showing a language worth serving *and*
+someone who can verify it; for R-23, a reason to want the second channel; for R-24, a user asking
+for continuous sync rather than a manual export.

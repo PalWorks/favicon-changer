@@ -1,6 +1,12 @@
 # Publishing
 
-How to get a build into each store. Chrome is live; Edge and Firefox are ROADMAP R-23.
+How to get a build into each store.
+
+> **Status, 2026-09-07: the Chrome Web Store is the only channel in use.** Edge and Firefox are
+> **paused by decision** (ROADMAP R-23, [DECISIONS.md](DECISIONS.md) ADR-018), not blocked. §2 and
+> §3 are complete and ready to execute, including the drafted listing copy and the generated Edge
+> logo, so restarting either is following the steps rather than researching them. Re-check the
+> vendor numbers first: store consoles change, and everything here was read on 2026-09-07.
 
 Every store requirement below was read off the vendor's own documentation on **2026-09-07** and is
 quoted with its source. Store consoles change; re-check the numbers before a submission rather
@@ -11,7 +17,7 @@ than trusting this file a year from now.
 ## 0. The package, for every store
 
 ```bash
-npm run check          # typecheck + 304 tests, the same gate the pre-push hook runs
+npm run check          # typecheck + 302 tests, the same gate the pre-push hook runs
 npm run build          # two passes: pages/worker, then the content script
 cd dist && zip -r ../favicon-changer-ultimate-v1.4.3.zip . && cd ..
 unzip -l favicon-changer-ultimate-v1.4.3.zip | tail -3   # sanity check the contents
@@ -27,13 +33,21 @@ reject a re-upload of a version it already has, so bump before resubmitting.
 
 ## 1. Chrome Web Store (live)
 
-Listing: `egedbdckafdbomehjaihjhbcgmngmlah`. Upload the zip in the developer dashboard, keep the
-privacy disclosures in step with [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md), publish. Review has
-historically taken a few days. Screenshots are still outstanding (R-39).
+**The only channel in use.** Listing: `egedbdckafdbomehjaihjhbcgmngmlah`.
+
+1. `npm run check && npm run build`, then zip `dist/` as in §0.
+2. Upload the zip in the developer dashboard against the existing item.
+3. Check the privacy disclosures still match [../PRIVACY_POLICY.md](../PRIVACY_POLICY.md). They
+   change whenever what the extension stores or sends changes; the review-prompt counter and the
+   support mail draft are both described there now.
+4. Paste the release notes from [../CHANGELOG.md](../CHANGELOG.md) for that version.
+5. Submit. Review has historically taken a few days.
+
+Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
 
 ---
 
-## 2. Microsoft Edge Add-ons
+## 2. Microsoft Edge Add-ons (paused)
 
 Chromium, so **there is no code work.** This is a Partner Center submission and a second listing
 to keep in step. Budget a day, plus up to seven business days of certification.
@@ -164,7 +178,7 @@ Only the screenshots (R-39). Everything else in this section is ready.
 
 ---
 
-## 3. Firefox (addons.mozilla.org)
+## 3. Firefox, addons.mozilla.org (paused)
 
 Verified working on Firefox 154 by installing the built `dist/` over WebDriver BiDi and driving it
 end to end. See ROADMAP R-23 for the measurements, table **r23-firefox-verified**.
@@ -253,18 +267,21 @@ does not exist yet:
 
 ## 4. Sequence, and what each store is waiting on
 
-| Store | Waiting on | Effort left |
-|---|---|---|
-| Chrome | Screenshots (R-39) | S |
-| Edge | Screenshots (R-39), and a Partner Center account | S, plus up to 7 business days of certification |
-| Firefox | The manifest target flag, a source submission, a licence decision, and the four checks in §3.5 | A week, dominated by review rather than code |
+| Store | State | If restarted, waiting on | Effort left |
+|---|---|---|---|
+| Chrome | **In use** | Nothing. Screenshots (R-39) would improve the listing but block no release | S |
+| Edge | **Paused** (ADR-018) | A Partner Center account, and ideally R-39 | S, plus up to 7 business days of certification |
+| Firefox | **Paused** (ADR-018) | The manifest target flag, a source submission, a licence decision, and the four checks in §3.5 | A week, dominated by review rather than code |
 
 Table name: **publishing-queue**
 
-**Do Edge first.** It is the same package, the account is free, the listing copy is drafted above,
-and it doubles the distribution channels for a day of form filling. Firefox is worth doing next,
-and is far cheaper than this project assumed until it was measured, but it is still a week with a
-store review inside it.
+**If a second channel is ever wanted, do Edge first.** It is the same package, the account is free,
+the listing copy is drafted above, and it doubles distribution for a day of form filling. Firefox
+next: far cheaper than this project assumed until it was measured, but still a week with a store
+review and a source submission inside it.
+
+The cost that paused both is not the submission. It is that a second listing has to be kept in step
+for ever: two privacy disclosures, two review queues, two sets of release notes.
 
 ---
 
