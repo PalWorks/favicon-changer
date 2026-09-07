@@ -80,12 +80,18 @@ for background tabs, Chrome keeps showing the load-time favicon until the tab is
 So `updateFavicon()` deliberately:
 
 1. collects every `link[rel*='icon']`,
-2. reuses the element already marked `data-fc-modified`, else the page's **own first** icon link
-   (the one Chrome began tracking at load), and mutates its `href` in place,
+2. picks the element Chrome is already tracking for the tab strip, in this order: one we have
+   marked `data-fc-modified`, else the page's first **real tab favicon** (a `rel` containing
+   `icon` but not `apple-touch-icon`, `apple-touch-icon-precomposed`, `mask-icon` or
+   `fluid-icon`), else the first icon-ish link at all, and mutates its `href` in place. Taking
+   merely the first icon-ish link broke every page that lists `apple-touch-icon` first, Wikipedia
+   included: we mutated a link the tab is not painted from and deleted the one it is (R-45),
 3. creates a new link **only** when the page has no icon link at all,
 4. skips the write entirely if the `href` is already correct (prevents a visible icon flash on
    redundant re-applies),
-5. removes the other icon links so the browser cannot pick a stale one.
+5. removes the other **tab** favicon links so the browser cannot pick a stale one, and leaves the
+   ones that never reach the tab strip alone, so the page keeps its home-screen and pinned-tab
+   artwork (R-44).
 
 **Do not refactor this into a remove-and-append.** It is the reason background tabs update
 without a reload, and it is how sites like Gmail update their own unread-count favicon. The test
@@ -97,9 +103,13 @@ Sites, especially SPAs, rewrite their own favicon after hydration, which would u
 change. Two mechanisms defend it, both wired up in `setupObserver()`:
 
 - A **MutationObserver** on `<head>` (`childList`, `subtree`, `attributes` filtered to
-  `href`/`rel`). Mutations on elements carrying `data-fc-modified` are ignored, so we never
-  react to our own writes. Real external changes are debounced by `OBSERVER_DEBOUNCE_MS`
-  (100 ms) so an SPA re-hydration burst collapses into one re-apply instead of a mutation war.
+  `href`/`rel`), with its predicate and debounce in `utils/faviconObserver.ts` where they are
+  tested. A mutation counts as displacing our icon when the `href` it left behind is **not** the
+  one we asked for. It is decided by value, not by whether the element carries our marker:
+  skipping marked elements skipped the case that matters, because the element an SPA rewrites is
+  usually the one we marked (ADR-014, R-43). Real external changes are debounced by
+  `OBSERVER_DEBOUNCE_MS` (100 ms) so an SPA re-hydration burst collapses into one re-apply
+  instead of a mutation war.
 - A **backup poller** every 2 s (`startVerificationInterval`), for changes an observer can miss.
   It **self-terminates** after `MAX_STABLE_CHECKS` (5) consecutive clean checks, so a quiet page
   stops waking the event loop after ~10 s. The observer re-arms it if the icon is later stolen.
@@ -229,13 +239,21 @@ background.ts ................. service worker: OS detection, action routing
 content.ts .................... orchestration: rule lookup, observer, polling
 
 components/
-  FaviconEditor.tsx ........... shared editor engine for popup and options (~520 lines)
+  FaviconEditor.tsx ........... the editor's markup. Draws, decides nothing (213 lines, R-15)
+  RatingPrompt.tsx ............ the one-time review ask (ADR-015)
   Accordion / Button / FaviconPreview ... presentational primitives
+  editor/useRuleEditor.ts ..... all editor behaviour: lifecycle, save path, chrome.* calls
+  editor/ScopeSelector.tsx .... the four-way match-type control
+  editor/PatternField.tsx ..... the prefix/regex field, its error and its tab preview
+  editor/EditorHeader.tsx ..... target, active pill, import/export, settings
+  editor/ConflictBanner.tsx ... "another rule wins", and the offer to edit that one
   editor/UploadSection.tsx .... file + drag-drop + URL, canvas fit modes, MIME repair
-  editor/EmojiSection.tsx ..... searchable emoji grid -> 64px canvas
+  editor/EmojiSection.tsx ..... searchable emoji grid -> 128px canvas
   editor/BadgeSection.tsx ..... badge/overlay compositor over the live site icon
   options/GlobalSettings.tsx .. fallback favicon, exclusion list, import/export
-  options/RulesList.tsx ....... rule table, click to edit
+  options/RulesList.tsx ....... rule table, search, filter, bulk delete, pause
+  options/StorageMeter.tsx .... quota use, self-refreshing on storage.onChanged
+  options/SupportSection.tsx .. "Get help", the prefilled support mail (ADR-017)
   options/DebugLogs.tsx ....... log viewer, verbose toggle, copy/download
   shared/ErrorBoundary.tsx .... wraps both React roots
 
@@ -245,10 +263,15 @@ utils/
   matcher.ts .................. findBestRule / findConflictingRule  (pure, unit-tested)
   rating.ts ................... when to ask for a review, and the rules about how (ADR-015)
   ruleScope.ts ................ the editor's scope/pattern machine (pure, ADR-016)
+  support.ts .................. what the support mail says (pure, ADR-017)
+  patterns.ts ................. prefix/regex suggestions, hostname reading (R-49)
+  handoff.ts .................. the popup-to-window handoff key and shape (ADR-007, R-59)
   storage.ts .................. all chrome.storage access, migration, import/export, hand-off
+  importRules.ts .............. what is allowed in from a JSON file, and the summary text
   messaging.ts ................ isRestrictedUrl, PING-then-inject, sendMessageToTab
   canvas.ts ................... drawOverlay, drawBadge, compression, data-URL MIME repair
-  validation.ts ............... regex/URL/file-type/file-size guards
+  validation.ts ............... regex, icon-URL allow-list, file type and size guards
+  platform.ts ................. does this OS kill the popup on a file dialog (ADR-007)
   logger.ts ................... opt-in persistent logger, memory-cached enable flag
 
 types.ts ...................... FaviconRule, GlobalSettings, StorageData, MatchType

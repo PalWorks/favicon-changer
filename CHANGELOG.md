@@ -22,6 +22,23 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
   diagnostics" gives you the same block if you would rather use webmail.
 
 ### Fixed
+- **Excluding a site now takes effect straight away.** Adding a site to the excluded list put its
+  own icon back immediately; before, the icon this extension had applied stayed until you reloaded
+  the page.
+- **The fallback favicon field now tells you when the address is wrong.** A typo there used to be
+  saved and then applied to every site without a rule, with no feedback but a broken icon
+  everywhere.
+- **Pasting a full address into the excluded-sites box works.** It is read down to the site name,
+  so `https://analytics.google.com/reports` excludes `analytics.google.com` instead of adding an
+  entry that matched nothing.
+- **"Paste image URL" now refuses an address that is not an image.** It accepted anything the
+  browser could parse, including things that could never load as an icon.
+- **Exporting a large set of rules works.** With many uploaded icons the export could silently do
+  nothing; it is now written as a file rather than a very long link, and is named
+  `favicon-changer-rules-<date>.json`.
+- **Two saves in quick succession no longer swallow the second confirmation.**
+- **"Copy logs" tells the truth.** It used to say it had copied even when the browser refused.
+- **The import summary reads correctly** when exactly one rule uses a remote image URL.
 - **"Edit that rule instead" edited the wrong rule.** On the warning that another rule takes
   precedence, the button that offers to edit that rule instead dropped you into editing a *wider*
   rule than the one named, and saving created a second rule rather than changing the first. It now

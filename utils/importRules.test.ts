@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateImportedRules } from './importRules';
+import { describeImport, validateImportedRules } from './importRules';
 import { MAX_IMPORT_RULES } from './validation';
 
 const PNG = 'data:image/png;base64,iVBORw0KGgo=';
@@ -214,4 +214,55 @@ describe('validateImportedRules: field rebuilding', () => {
     const bad = validateImportedRules(file(raw({ id: 'b', originalUrl: 'javascript:alert(1)' })));
     expect(bad.accepted.b.originalUrl).toBeUndefined();
   });
+});
+
+// The only thing a user reads after an import, and until 2026-09-07 the only
+// thing here with no coverage at all. Found by running a real import in the
+// browser and reading what came back.
+describe('describeImport', () => {
+    const report = (over: Partial<Parameters<typeof describeImport>[0]> = {}) => ({
+        success: true, count: 1, remoteCount: 0, rejected: [], ...over,
+    });
+
+    it('reports a fatal error on its own, with no import count', () => {
+        const text = describeImport(report({ success: false, count: 0, fatal: 'That file is not valid JSON.' }));
+        expect(text).toContain('not valid JSON');
+        expect(text).not.toContain('Imported');
+    });
+
+    it('counts rules with the right plural', () => {
+        expect(describeImport(report({ count: 1 }))).toContain('Imported 1 rule.');
+        expect(describeImport(report({ count: 4 }))).toContain('Imported 4 rules.');
+    });
+
+    it('makes the verb agree when exactly one rule uses a remote icon', () => {
+        expect(describeImport(report({ remoteCount: 1 }))).toContain('One of them uses a remote image URL');
+        expect(describeImport(report({ count: 3, remoteCount: 2 }))).toContain('2 of them use a remote image URL');
+    });
+
+    it('says nothing about remote icons when there are none', () => {
+        expect(describeImport(report())).not.toContain('remote image URL');
+    });
+
+    it('lists each rejection with its reason', () => {
+        const text = describeImport(report({
+            rejected: [
+                { matcher: 'bad.example', reason: 'unknown match type "sometype"' },
+                { matcher: 'evil.example', reason: 'icon must be an inline image or an http(s) address' },
+            ],
+        }));
+        expect(text).toContain('Skipped 2:');
+        expect(text).toContain('bad.example: unknown match type "sometype"');
+        expect(text).toContain('evil.example: icon must be an inline image');
+    });
+
+    // A file of 500 bad rules must not produce 500 lines in a modal dialog.
+    it('caps the list at eight and counts the rest', () => {
+        const rejected = Array.from({ length: 12 }, (_, i) => ({ matcher: `r${i}.example`, reason: 'missing id' }));
+        const text = describeImport(report({ rejected }));
+        expect(text).toContain('Skipped 12:');
+        expect(text).toContain('r7.example');
+        expect(text).not.toContain('r8.example');
+        expect(text).toContain('and 4 more');
+    });
 });

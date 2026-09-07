@@ -127,22 +127,21 @@ export const compressFaviconDataUrl = async (dataUrl: string, maxSizeKB = 50): P
 
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Start with high quality
-            let quality = 0.9;
-            let compressedUrl = canvas.toDataURL('image/png', quality);
+            // PNG, always: these are icons with transparency, and toDataURL's
+            // quality argument does nothing for PNG. So the only lever is size,
+            // and the loop below shrinks rather than pretending to re-encode.
+            let compressedUrl = canvas.toDataURL('image/png');
 
-            // If still too big, try JPEG (though PNG is better for transparency)
-            // For favicons, we really want PNG. If it's too big, we might just have to accept it 
-            // or resize further. 50KB is actually quite a lot for 128x128.
-            // A 128x128 PNG is usually ~20-30KB max.
-            
-            // Simple check: string length * 0.75 ~= bytes
-            while (compressedUrl.length * 0.75 > maxSizeKB * 1024 && quality > 0.1) {
-                quality -= 0.1;
-                // PNG doesn't support quality param in toDataURL, so this loop is mostly for if we switch to jpeg
-                // or if browser supports webp. Let's stick to resizing if needed.
-                // Actually, let's just enforce the size limit by resizing if needed.
-                
+            // Base64 carries 3 bytes in every 4 characters.
+            const tooBig = () => compressedUrl.length * 0.75 > maxSizeKB * 1024;
+
+            // A 128x128 PNG is 20 to 30KB, so this rarely runs at all. Bounded
+            // at 8 passes (down to ~43% of the starting edge) rather than
+            // looping until it fits: an image that is still too big after that
+            // is stored slightly oversized, which the storage meter and the
+            // import cap both account for. Better than an unbounded loop in a
+            // click handler.
+            for (let pass = 0; pass < 8 && tooBig(); pass++) {
                 width = Math.floor(width * 0.9);
                 height = Math.floor(height * 0.9);
                 canvas.width = width;
@@ -154,7 +153,7 @@ export const compressFaviconDataUrl = async (dataUrl: string, maxSizeKB = 50): P
 
             resolve(compressedUrl);
         };
-        img.onerror = (e) => reject(new Error('Failed to load image for compression'));
+        img.onerror = () => reject(new Error('Failed to load image for compression'));
         img.src = dataUrl;
     });
 };

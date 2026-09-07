@@ -8,17 +8,18 @@ export const DebugLogs: React.FC = () => {
     const [loggingEnabled, setLoggingEnabled] = useState(false);
 
     useEffect(() => {
-        if (showLogs) {
+        if (!showLogs) return undefined;
+
+        const refresh = () => {
             logger.getLogs().then(setLogs);
             logger.isEnabled().then(setLoggingEnabled);
-
-            // Poll for logs every 2s if open
-            const interval = setInterval(() => {
-                logger.getLogs().then(setLogs);
-                logger.isEnabled().then(setLoggingEnabled);
-            }, 2000);
-            return () => clearInterval(interval);
-        }
+        };
+        refresh();
+        // Polled rather than watched: entries arrive from the content script and
+        // the service worker as well as this page, and the log is a debugging
+        // surface the user has deliberately opened, so 2s is cheap and correct.
+        const interval = setInterval(refresh, 2000);
+        return () => clearInterval(interval);
     }, [showLogs]);
 
     const handleToggleLogging = async (enabled: boolean) => {
@@ -29,9 +30,16 @@ export const DebugLogs: React.FC = () => {
         }
     };
 
-    const handleCopyLogs = () => {
-        navigator.clipboard.writeText(logs.join('\n'));
-        alert('Logs copied to clipboard!');
+    const handleCopyLogs = async () => {
+        // Awaited: this used to claim success before the write had resolved, so
+        // a refused clipboard (no permission, no focus) still said "copied".
+        try {
+            await navigator.clipboard.writeText(logs.join('\n'));
+            alert('Logs copied to clipboard.');
+        } catch (e) {
+            logger.warn('[Logs] clipboard write refused', e);
+            alert('Could not copy. Use Download instead, or select the log text above.');
+        }
     };
 
     const handleClearLogs = async () => {

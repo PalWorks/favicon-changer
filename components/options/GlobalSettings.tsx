@@ -5,6 +5,8 @@ import { Button } from '../Button';
 import { exportRulesAsJson, importRulesFromJson } from '../../utils/storage';
 import { StorageMeter } from './StorageMeter';
 import { describeImport } from '../../utils/importRules';
+import { isAllowedFaviconUrl } from '../../utils/validation';
+import { hostnameFromInput } from '../../utils/patterns';
 
 interface GlobalSettingsProps {
     settings: GlobalSettingsType;
@@ -20,6 +22,9 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
     // (LIMITATIONS L-07), which on a 40-character URL meant 40 writes and 40
     // full-tab fan-outs. Commit happens on blur or Enter instead.
     const [fallbackDraft, setFallbackDraft] = useState(settings.defaultFaviconUrl || '');
+    // Rejections from the two free-text fields, announced rather than swallowed.
+    const [fallbackError, setFallbackError] = useState('');
+    const [exclusionError, setExclusionError] = useState('');
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -46,16 +51,34 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
         const next = fallbackDraft.trim() || undefined;
         // Skip a no-op save so blurring an untouched field does not broadcast.
         if (next === (settings.defaultFaviconUrl || undefined)) return;
+        // Held to the same standard as an imported rule's icon. This field had
+        // no validation at all, so a typo became the icon on every site with no
+        // rule of its own, which is the widest blast radius in the product.
+        if (next && !isAllowedFaviconUrl(next)) {
+            setFallbackError('That has to be an image address starting with https:// or http://, or an inline image.');
+            return;
+        }
+        setFallbackError('');
         onSettingsChange({ ...settings, defaultFaviconUrl: next });
     };
 
     const excludedDomains = settings.excludedDomains ?? [];
 
     const handleAddExclusion = () => {
-        const domain = newExcludedDomain.trim().toLowerCase();
-        if (!domain || excludedDomains.includes(domain)) return;
-        onSettingsChange({ ...settings, excludedDomains: [...excludedDomains, domain] });
+        const raw = newExcludedDomain.trim();
+        if (!raw) return;
+        // Normalised to a hostname, so pasting a full address works instead of
+        // adding an entry that could never match. The content script compares
+        // this against window.location.hostname exactly.
+        const domain = hostnameFromInput(raw).toLowerCase();
+        if (!domain) {
+            setExclusionError('Enter a site, for example analytics.google.com.');
+            return;
+        }
+        setExclusionError('');
         setNewExcludedDomain('');
+        if (excludedDomains.includes(domain)) return;
+        onSettingsChange({ ...settings, excludedDomains: [...excludedDomains, domain] });
     };
 
     const handleRemoveExclusion = (domain: string) => {
@@ -96,6 +119,12 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                         </div>
                     </div>
 
+                    {!!fallbackError && (
+                        <p role="status" aria-live="assertive" className="mt-2 text-[11px] text-red-700">
+                            {fallbackError}
+                        </p>
+                    )}
+
                     {settings.defaultFaviconUrl && (
                         <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-snug">
                             This is replacing the favicon on every site you visit that has no rule of its own. Clear
@@ -123,6 +152,11 @@ export const GlobalSettings: React.FC<GlobalSettingsProps> = ({ settings, onSett
                             Add
                         </Button>
                     </div>
+                    {!!exclusionError && (
+                        <p role="status" aria-live="assertive" className="-mt-2 mb-3 text-[11px] text-red-700">
+                            {exclusionError}
+                        </p>
+                    )}
                     {excludedDomains.length > 0 && (
                         <ul className="space-y-1.5 max-h-40 overflow-y-auto">
                             {excludedDomains.map(domain => (

@@ -17,17 +17,22 @@ finding keeps its number for life. Detail for each is further down; defects are 
 [docs/LIMITATIONS.md](docs/LIMITATIONS.md) as `L-xx`.
 
 Legend: **done** shipped and verified · **next** the current work queue, in order ·
-**pending** agreed but not started · **standing** a decision already taken, no action unless it
-changes.
+**paused** planned, then deliberately deferred, with the plan kept ready ·
+**standing** a decision already taken, no action unless it changes.
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 44 | Shipped and verified, latest 2026-09-07 in v1.4.3 |
-| Next up | 1 | R-39, which needs real UI captures |
-| Pending | 3 | R-22, R-23 and R-24, each a project. R-24 agreed as opt-in and off by default |
+| Done | 55 | Shipped and verified, latest 2026-09-07 in v1.4.3, including the 11 findings of the pre-release audit |
+| Next up | 0 | Nothing queued. v1.4.3 is audited and packaged, waiting on a Chrome Web Store upload |
+| Paused | 4 | R-22, R-23, R-24 and R-39, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
 Table name: **roadmap-buckets**
+
+**Scope as of 2026-09-07: Chrome Web Store only, English only.** Internationalisation (R-22),
+Firefox and Edge (R-23) and cross-device sync (R-24) are paused by decision, not abandoned. Each
+already carries a full plan below, so restarting one is picking the plan up rather than writing
+it. Recorded as [ADR-018](docs/DECISIONS.md).
 
 ### Done
 
@@ -77,6 +82,17 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-48 | Unit-test the observer's re-apply predicate | S | (2026-09-06) Extracted to `utils/faviconObserver.ts` and covered by 13 tests. Reintroducing the R-43 bug turns 5 of them red, verified by doing it |
 | R-47 | Rating prompt | S | (2026-09-06) One ask after four days of real use, permanent dismissal, no sentiment gating (ADR-015). 18 tests. Verified in the loaded extension on both surfaces |
 | R-46 | In-product support channel | S | (2026-09-07) "Get help" composes a `mailto:` carrying the version, browser, platform and rule count. No server, no key, no promise changed (ADR-017). 24 tests. Verified in the loaded extension, clipboard fallback included |
+| R-50 | Excluding a site did nothing until the page was reloaded | S | (2026-09-07) Our icon stayed, and the observer and poller stayed live. Also the icon capture ran before the exclusion check, so an "untouched" page was read anyway. Both fixed; 8 live checks |
+| R-51 | The fallback favicon field accepted anything | S | (2026-09-07) A typo became the icon on every site with no rule of its own, the widest blast radius in the product. Now held to the same guard as an imported icon, with the rejection announced |
+| R-52 | An excluded site could be added in a form that never matches | S | (2026-09-07) The field stored whatever was typed, so a pasted address was compared against `location.hostname` and never matched. Now normalised to its host, or refused |
+| R-53 | The icon URL field was weaker than the import validator | S | (2026-09-07) It asked only whether `new URL()` parsed, which is true of `javascript:`. The same value was rejected on import. Both now use `isAllowedFaviconUrl`; the weaker helper is gone |
+| R-54 | Export was a `data:` URL, which is a size cliff | S | (2026-09-07) Icons are stored inline, so a heavy user's export is megabytes and a `data:` href that size is where a browser quietly refuses. Now a Blob. Verified with a 60KB icon |
+| R-55 | The import summary said "1 of them use" | S | (2026-09-07) The one message every importing user reads, and `describeImport` had no test coverage at all. Fixed, and covered by 6 tests |
+| R-56 | Two quick saves cleared the second message early | S | (2026-09-07) The status flash left its timer running and never cleared it on unmount. One timer now, replaced rather than stacked |
+| R-57 | "Logs copied to clipboard!" was claimed before the write resolved | S | (2026-09-07) A refused clipboard still reported success. Awaited, and it now says what to do instead |
+| R-58 | TypeScript was not in strict mode | S | (2026-09-07) The codebase already passed `strict`, so it cost nothing to enforce and stops a regression. Plus noUnusedLocals, noUnusedParameters, noImplicitReturns, noFallthroughCasesInSwitch |
+| R-59 | The editor handoff key was declared twice | S | (2026-09-07) Once in `background.ts` and once in `utils/storage.ts`, so renaming one would have broken the Linux upload path silently and only on Linux. Now `utils/handoff.ts`, imported by both |
+| R-60 | Documentation described behaviour the code no longer had | S | (2026-09-07) Four stale claims corrected, including a DOMAIN invariant that named the wrong mechanism and a resolution order missing the `prefix` tier |
 | R-15 | Extract the editor's logic into a hook | M | (2026-09-07) 771 lines down to 213 of markup over a hook and a pure reducer. An unedited pattern is now derived, not stored (ADR-016), which removed two pieces of state, one effect, and a corruption bug in "Edit that rule instead" reproduced in a real browser against both builds. 52 new tests |
 | R-49 | A junk domain rule could be saved | S | (2026-09-07) Chrome percent-encodes illegal host characters where Node throws, so "not a url at all" saved a rule that could match nothing. Hostname shape is checked now, and `localhost:3000` reads as a host and port rather than a scheme |
 
@@ -84,28 +100,33 @@ Table name: **roadmap-done**
 
 ### Next up
 
-| ID | Item | Effort | Status | Why now |
+**Empty, deliberately.** v1.4.3 is audited, packaged and waiting on a Chrome Web Store upload,
+which is the user's action and not a code task. Everything still open is either paused by decision
+(table **roadmap-paused**) or a standing decision not to act.
+
+**How the queue got here.** 1.4.0 brought prefix matching, a regex UI, specificity-based
+precedence, hardened import, correctly sized store assets, a third smaller package and the Tier 2
+bug batch. Driving the loaded extension in a real browser then found R-42 to R-45, of which R-45
+broke the product's core promise on a large class of sites. 1.4.2 and 1.4.3 added accessibility
+names and announcements, the observer tests, the rating prompt, the editor split (R-15) and the
+support channel (R-46). The pre-release audit then found R-50 to R-60. Items 1 to 6 of the manual
+list in [docs/TESTING.md](docs/TESTING.md) now run under the DevTools protocol against a real
+Chrome, so they are no longer a manual gate.
+
+### Paused
+
+Planned in full, then deferred on 2026-09-07 (ADR-018). Nothing here is blocked on research: each
+has its plan and its open questions written down further below, so the cost of restarting is
+reading it, not redoing it.
+
+| ID | Item | Tier | Effort | Why it is paused, and what restarts it |
 |---|---|---|---|---|
-| R-39 | Store screenshots | S | **pending** | Blocks a Chrome listing update and an Edge submission. Capture at **1280x800**, the one size both stores accept. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
+| R-22 | Internationalisation | 5 | M | **English only for now.** 114 UI strings plus 693 emoji keywords, and the useful order (extract to `en`, then the store listing, then two or three verified languages) is a week of work whose payoff cannot be measured yet. Restart when the dashboard's install breakdown shows a language worth serving *and* someone can verify that translation |
+| R-23 | Firefox and Edge | 5 | S + M | **Chrome Web Store only for now.** The walkthrough is ready in [docs/PUBLISHING.md](docs/PUBLISHING.md), Edge needs a free account and R-39, Firefox needs a source submission and a licence choice. Restart when a second channel is worth the second listing to keep in step |
+| R-24 | Cross-device sync | 5 | L | **Deferred, revisit later.** The design (sync reproducible metadata, never rendered icons) and the trade (opt-in, off by default, policy changed in the same release) are both settled; the work is not started. Export and import already move rules between devices manually |
+| R-39 | Store screenshots | 3 | S | **Deferred 2026-09-07 by decision.** The listing has none, which costs installs, but nothing blocks a release. Capture at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser now, so they are scriptable rather than manual |
 
-Table name: **roadmap-next**
-
-**v1.4.0 is code-complete. v1.4.1 carries the three runtime bugs found after it.** 1.4.0 brought
-prefix matching, a regex UI, specificity-based precedence, hardened import, correctly sized store
-assets, a third smaller package and the Tier 2 bug batch. Driving the loaded extension in a real
-browser then found R-42, R-43, R-44 and R-45, of which R-45 broke the product's core promise on a
-large class of sites. Items 1 to 6 of the manual list in [docs/TESTING.md](docs/TESTING.md) now
-run under the DevTools protocol against a real Chrome, so they are no longer a manual gate.
-
-### Pending
-
-| ID | Item | Tier | Effort | Note |
-|---|---|---|---|---|
-| R-22 | Internationalisation | 5 | M | Planned 2026-09-07. About 114 UI strings, plus 693 emoji keywords as a separate call. Needs a decision on which languages |
-| R-23 | Firefox and Edge | 5 | S + M | Planned 2026-09-07, walkthrough in [docs/PUBLISHING.md](docs/PUBLISHING.md). Edge is paperwork and the listing copy is drafted. Firefox verified working on 154 with two manifest lines and no shim; needs a source submission and a licence choice |
-| R-24 | Cross-device sync | 5 | L | Planned 2026-09-07. Sync reproducible rule metadata, not rendered icons. Agreed 2026-09-07 as opt-in and off by default, with the privacy policy changed in the same release |
-
-Table name: **roadmap-pending**
+Table name: **roadmap-paused**
 
 ### Standing decisions
 
@@ -131,11 +152,11 @@ Table name: **roadmap-standing**
 | Users | 983 |
 | Rating | 4.4 ★ from 7 ratings |
 | Category | Developer Tools |
-| Tests | 280 across 11 files, including jsdom locks on the favicon write path and the observer, and a pure reducer for the editor's scope logic |
+| Tests | 302 across 12 files, including jsdom locks on the favicon write path and the observer, a pure reducer for the editor's scope logic, and the support mail |
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
-| Runtime verification | Items 1 to 6 of docs/TESTING.md, driven over the DevTools protocol against a real Chrome |
+| Runtime verification | Items 1 to 6 of docs/TESTING.md plus 67 checks from the 2026-09-07 audit, driven over the DevTools protocol against a real Chrome |
 | Security contact | support@palworks.ai |
 
 Table name: **product-snapshot**
@@ -414,6 +435,125 @@ fixed by the same preference used for R-45. Four new jsdom cases. Verified live:
 on a background Wikipedia tab now restores `favicon/wikipedia.ico` in about a second, and the
 `apple-touch-icon` link is still there afterwards.
 
+## The 2026-09-07 pre-release audit
+
+A full read of every source file, a dependency and secret scan, then 67 checks driven against the
+loaded extension in a real Chrome. R-50 to R-60 are what it found. Nine were defects in shipped
+behaviour, and none of them had a failing test: seven were in code paths no unit test could reach
+(a browser input, a download, a clipboard), and two were in code with no tests at all.
+
+The two conclusions worth keeping:
+
+1. **Every input the user can type into needs the same guard as data arriving from a file.** Three
+   of the nine (R-51, R-52, R-53) were the same mistake in three places: the import path was
+   hardened by R-07 and the typing paths were left as they were, so a value rejected from a file
+   was accepted from a keyboard.
+2. **A false failure costs as much as a real one.** Seven runs failed for harness reasons before
+   the product was ever at fault, including a stale content script that survived a rebuild. They
+   are all written down in [docs/TESTING.md](docs/TESTING.md), table **testing-harness-traps**.
+
+### R-50 · Excluding a site did nothing until the page was reloaded · **S** · ✅ done 2026-09-07
+Two faults in one branch of `applyRule()`, both contradicting DOMAIN invariant 1.
+
+Excluding a domain while one of our rules was applied returned early, so **our icon stayed on the
+page** and the MutationObserver and the 2s poller stayed live. The user's only recourse was a
+reload, which the settings copy does not mention. And `captureOriginalFavicon()` ran *before* the
+exclusion check, so an excluded page had its `<head>` read after all, which the same invariant says
+never happens.
+
+Now the exclusion check runs first, and it restores the page's own icon and tears everything down
+if we had already acted. Verified live: excluding a site with a rule applied put `/red.png` back in
+both the DOM and the tab strip with no reload, and it stayed put across two poll intervals.
+
+### R-51 · The fallback favicon field accepted anything · **S** · ✅ done 2026-09-07
+`commitFallback()` trimmed the input and saved it. Nothing else. That value becomes the icon on
+**every site with no matching rule**, so a typo was the widest-reaching mistake available in the
+product, and the only feedback was every tab quietly showing a broken image.
+
+It is now held to `isAllowedFaviconUrl`, the same guard an imported rule's icon passes, and a
+rejection is announced through `role="status"` rather than saved. Verified live: junk is refused
+with a message and nothing is written; a real address saves on blur and on Enter.
+
+### R-52 · An excluded site could be added in a form that never matches · **S** · ✅ done 2026-09-07
+The field lower-cased what was typed and stored it. The content script compares that against
+`window.location.hostname`, so pasting `https://analytics.google.com/reports` added an entry that
+could never match anything, with no way for the user to tell.
+
+Normalised through `hostnameFromInput()` now, which is the helper the rest of the editor already
+uses, so a pasted address becomes `analytics.google.com`. Input with no readable host is refused
+with a message instead of stored. Verified live for both cases.
+
+### R-53 · The icon URL field was weaker than the import validator · **S** · ✅ done 2026-09-07
+"Paste image URL" checked `isValidUrl`, which answered only whether `new URL()` parsed the string.
+That is true of `javascript:alert(1)` and `data:text/html,...`. The very same value in an imported
+file was rejected by `isAllowedFaviconUrl`, so the product was stricter about a file it was given
+than about a value it was typed.
+
+Both paths now use `isAllowedFaviconUrl`, and **`isValidUrl` has been deleted** rather than left
+lying around for the next person to reach for, with a note in its place saying why. Verified live:
+`javascript:alert(1)` is refused with a message and saves nothing; a real image address saves.
+
+### R-54 · Export was a `data:` URL, which is a size cliff · **S** · ✅ done 2026-09-07
+`exportRulesAsJson` built `data:text/json;charset=utf-8,` plus the whole encoded file and put it in
+an anchor's href. Every icon is stored inline (ADR-004), so a user with a few dozen uploads has a
+multi-megabyte export, and a `data:` href that size is where a browser refuses the navigation
+without saying anything.
+
+Now a Blob and an object URL, the same pattern `logger.downloadLogs()` already used. The download
+also stopped carrying the pre-release codename: `favicon-changer-rules-<date>.json`. Verified by
+driving the real button with a 60KB inline icon in storage and reading the file off disk: valid
+JSON, both rules, the icon byte-for-byte, and a regex matcher intact.
+
+### R-55 · The import summary said "1 of them use" · **S** · ✅ done 2026-09-07
+Found by reading what a real import actually said, rather than by reading the code. `describeImport`
+is the one thing every importing user sees, and it had **no test coverage at all**, so the plural
+had nowhere to fail. Fixed to agree with its count, and covered by 6 tests including the cap that
+stops a file of 500 bad rules producing 500 lines in a modal.
+
+### R-56 · Two quick saves cleared the second message early · **S** · ✅ done 2026-09-07
+`flashStatus` called `setTimeout` and kept no handle, so a second save inherited the first save's
+countdown and its confirmation vanished early. Nothing cleared the timer on unmount either, and the
+action popup is destroyed the moment it loses focus. One timer now, replaced on each flash and
+cleared on unmount.
+
+### R-57 · "Logs copied to clipboard!" was claimed before the write resolved · **S** · ✅ done 2026-09-07
+`navigator.clipboard.writeText()` was called without `await` and the success alert fired
+regardless, so a clipboard refused for want of focus or permission still reported success. Awaited
+now, with a message that tells the user to use Download instead. The same mistake was avoided in
+the new support section, which is what prompted the check here.
+
+### R-58 · TypeScript was not in strict mode · **S** · ✅ done 2026-09-07
+`tsconfig.json` had no `strict`, so `strictNullChecks` and `noImplicitAny` were both off, while
+[AGENTS.md](AGENTS.md) asked for exactly that in prose. Measured before changing anything: the
+codebase **already passed** `--strict` with zero errors, so this was free, and now it cannot
+silently regress. `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns` and
+`noFallthroughCasesInSwitch` went on with it, after fixing the three things they found (an unused
+React import, an unused catch binding, an effect with one path returning a cleanup and one not).
+
+`exactOptionalPropertyTypes` (8 errors) and `noUncheckedIndexedAccess` (52) were measured and
+deliberately left off, with the reasons recorded in the config: both would be churn against
+patterns this codebase uses on purpose.
+
+### R-59 · The editor handoff key was declared twice · **S** · ✅ done 2026-09-07
+`pendingEditorTarget` was a string literal in `background.ts` and another in `utils/storage.ts`.
+Renaming one would have broken the Linux upload path (ADR-007) silently, and only on Linux, which
+is the hardest possible place to notice. Both now import `utils/handoff.ts`, which is its own tiny
+module rather than a constant in `constants.ts` because the service worker is a separate bundle and
+`constants.ts` carries the 693-keyword emoji catalogue. `background.js` stayed at 1.34 kB.
+
+### R-60 · Documentation described behaviour the code no longer had · **S** · ✅ done 2026-09-07
+Four stale claims, each found by reading the doc against the code rather than by trusting it:
+
+- **DOMAIN invariant 5** said our own writes are ignored because the observer skips marked
+  elements. That is the exact bug R-43 fixed; it compares the `href` value (ADR-014). The glossary
+  entry for the change mark said the same wrong thing, and so did the top of `faviconDom.ts`.
+- **DOMAIN's resolution order** listed exact_url, regex and domain, missing the `prefix` tier
+  entirely, and implied the tiers are scanned in order rather than scored.
+- **ARCHITECTURE's `updateFavicon` steps** still described taking the page's first icon link,
+  which is what R-45 fixed, and its observer bullet repeated the marker claim.
+- **LIMITATIONS L-20** still said Firefox needs a `browser` namespace shim, which R-23 disproved by
+  installing the build in Firefox 154, and `store-assets/README.md` still called R-36 outstanding.
+
 ### R-49 · A junk domain rule could be saved · **S** · ✅ done 2026-09-07
 Found while auditing R-15 in a real browser. Typing "not a url at all" on the settings page with
 Entire Domain selected saved a rule whose matcher was `not%20a%20url%20at%20all`: a string no
@@ -624,7 +764,8 @@ left filling their canvases: the padding guidance is for the 128 used by the sto
 `chrome://extensions`, while those two are the toolbar and management icons, which should not
 shrink.
 
-### R-39 · No store screenshots exist · **S** · *blocks a listing update*
+### R-39 · No store screenshots exist · **S** · **paused** · *deferred 2026-09-07 (ADR-018)*
+The listing still has none, which costs installs, but it blocks no release. Deferred by decision.
 The listing requires at least one screenshot at 1280x800 or 640x400, up to five. None are in the
 repo. These have to be real captures of the popup and settings page, so they cannot be generated
 from the design masters. Good candidates: the four-way scope selector with a prefix pattern and
@@ -809,7 +950,8 @@ tab.
 
 ## Tier 5: reach (each is a project, not a task)
 
-### R-22 · Internationalisation · **M**, not L · *planned 2026-09-07, needs two decisions*
+### R-22 · Internationalisation · **M**, not L · **paused** · *planned 2026-09-07, paused the same day (ADR-018)*
+English only for now, by decision. The plan below stands and is what to pick up when this restarts.
 Sized rather than guessed: **about 114 user-facing strings** across the UI, concentrated in six
 files (BadgeSection 16, RulesList 15, FaviconEditor 14, UploadSection 14, GlobalSettings 9,
 EditorHeader 9). That is a week's work, not a month's, which is why this moves from L to M.
@@ -889,7 +1031,9 @@ Table name: **r22-specifics**
 **Sequence.** Extract to `en` first and ship that alone. It is the whole refactor, it is verifiable
 because the UI must look identical afterwards, and it turns every later language into a data file.
 
-### R-23 · Firefox and Edge · **S for Edge, M for Firefox** · *planned 2026-09-07, verified in a real browser*
+### R-23 · Firefox and Edge · **S for Edge, M for Firefox** · **paused** · *planned 2026-09-07, paused the same day (ADR-018)*
+Chrome Web Store only for now, by decision. The submissions are written up step by step in
+[docs/PUBLISHING.md](docs/PUBLISHING.md) and stay ready; what follows is what was measured.
 This was written as "Edge likely near-free; Firefox needs a namespace shim". Firefox 154 was then
 actually installed and driven, and **the shim assumption was wrong**. What follows is measured.
 
@@ -953,7 +1097,9 @@ keep in sync by hand.
 **Revised estimate.** Firefox is a week, dominated by the permission model and store review rather
 than by code. The `browser`-versus-`chrome` work that made this look like a project does not exist.
 
-### R-24 · Cross-device sync · **L** · *planned 2026-09-07, privacy trade decided 2026-09-07*
+### R-24 · Cross-device sync · **L** · **paused** · *planned 2026-09-07, privacy trade decided, then paused (ADR-018)*
+Deferred to revisit later, by decision. Both the design and the privacy trade are settled below,
+so restarting is implementation rather than deliberation.
 Not a storage-area swap, and the reason is arithmetic. `chrome.storage.sync` is documented at
 roughly 100 KB total, **8 KB per item**, 512 items, and write quotas around 1800 an hour and 120 a
 minute (verify against current docs before building). A 128x128 PNG data URL is 12 to 25 KB, so a

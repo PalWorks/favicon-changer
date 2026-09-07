@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   isValidRegex,
-  isValidUrl,
   isValidBadgeText,
   isAllowedFaviconUrl,
   approximateUrlBytes,
@@ -26,22 +25,6 @@ describe('isValidRegex', () => {
   it('rejects a pattern at the length cap, as a partial ReDoS guard', () => {
     expect(isValidRegex('a'.repeat(2000))).toBe(true);
     expect(isValidRegex('a'.repeat(2001))).toBe(false);
-  });
-});
-
-describe('isValidUrl', () => {
-  it.each([
-    'https://example.com',
-    'http://example.com/a?b=1#c',
-    'file:///home/user/x.html',
-    'chrome://extensions',
-  ])('accepts %s', (url) => {
-    expect(isValidUrl(url)).toBe(true);
-  });
-
-  it.each(['example.com', 'not a url', '', '//example.com'])('rejects %s', (url) => {
-    // Scheme-relative and bare hostnames are not absolute URLs.
-    expect(isValidUrl(url)).toBe(false);
   });
 });
 

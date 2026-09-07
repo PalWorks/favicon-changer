@@ -1,4 +1,4 @@
-// This file is the Content Script. 
+// This file is the Content Script.
 
 import { GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
@@ -30,11 +30,10 @@ function applyFavicon(url: string) {
 // (Logic moved to utils/matcher.ts)
 
 let observer: FaviconObserver | null = null;
-let intervalId: any = null;
+let intervalId: number | null = null;
 
 function setupObserver(targetUrl: string) {
-  if (observer) observer.disconnect();
-  if (intervalId) clearInterval(intervalId);
+  stopWatching();
 
   const head = document.querySelector('head');
   if (!head) return;
@@ -47,11 +46,24 @@ function setupObserver(targetUrl: string) {
     logger.debug('[Content] Detected external change, re-applying (debounced)...');
     applyFavicon(targetUrl);
     // Re-arm the backup poller in case it had stopped after being stable.
-    if (!intervalId) startVerificationInterval(targetUrl);
+    if (intervalId === null) startVerificationInterval(targetUrl);
   });
 
   // B. Interval Check (Backup for SPAs/Hydration). Self-stops once stable.
   startVerificationInterval(targetUrl);
+}
+
+// Stops watching and polling. Called when no rule applies and when the domain
+// is excluded, so an inactive page holds nothing live.
+function stopWatching() {
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
+  if (intervalId !== null) {
+    window.clearInterval(intervalId);
+    intervalId = null;
+  }
 }
 
 // Backup poller: re-applies our favicon if the page swaps it out. Once it has
@@ -59,18 +71,29 @@ function setupObserver(targetUrl: string) {
 // don't keep waking up the event loop forever on quiet pages. The
 // MutationObserver re-arms it (above) if the favicon is later changed.
 function startVerificationInterval(targetUrl: string) {
-  if (intervalId) clearInterval(intervalId);
+  if (intervalId !== null) window.clearInterval(intervalId);
   let stableChecks = 0;
-  intervalId = setInterval(() => {
+  // window.setInterval, not the bare global: this file is compiled with both
+  // the DOM and Node type libraries in scope, and only the DOM one returns the
+  // number that clearInterval() here expects.
+  intervalId = window.setInterval(() => {
     if (!hasFaviconHref(targetUrl)) {
       logger.debug('[Content] Interval check failed, re-applying...');
       applyFavicon(targetUrl);
       stableChecks = 0;
     } else if (++stableChecks >= MAX_STABLE_CHECKS) {
-      clearInterval(intervalId);
-      intervalId = null;
+      stopWatchingInterval();
     }
   }, 2000); // Check every 2 seconds
+}
+
+// Just the poller, leaving the observer in place: the page is stable, but it
+// can still take its icon back later, and the observer is what notices.
+function stopWatchingInterval() {
+  if (intervalId !== null) {
+    window.clearInterval(intervalId);
+    intervalId = null;
+  }
 }
 
 let originalFaviconUrl: string | null = null;
@@ -102,8 +125,6 @@ function restoreOriginalFavicon() {
 // tracked icon link's href in place, which repaints the tab (active OR
 // background) without a page reload; see the note on updateFavicon().
 function applyRule() {
-  captureOriginalFavicon();
-
   const currentUrl = window.location.href;
   const currentDomain = window.location.hostname;
 
@@ -116,11 +137,25 @@ function applyRule() {
     const rules = result.rules || {};
     const settings = (result.settings || {}) as GlobalSettings;
 
-    // Per-site exclusion list: leave the page completely untouched.
+    // Per-site exclusion list, checked before anything reads or writes the DOM
+    // so an excluded domain really is untouched (DOMAIN.md invariant 1). If the
+    // domain was excluded *while* one of our rules was applied, undo our work
+    // rather than leaving the icon we put there until the next reload.
     if (settings.excludedDomains?.includes(currentDomain)) {
-      logger.debug('[Content] Domain is excluded. Leaving favicon as-is.');
+      if (hasModified) {
+        logger.info('[Content] Domain is now excluded. Restoring original.');
+        restoreOriginalFavicon();
+      } else {
+        logger.debug('[Content] Domain is excluded. Leaving favicon as-is.');
+      }
+      stopWatching();
       return;
     }
+
+    // Read the page's own icon before we can possibly overwrite it. Deliberately
+    // after the exclusion check, which is the one branch that must not touch the
+    // page at all.
+    captureOriginalFavicon();
 
     const rule = findBestRule(currentUrl, currentDomain, Object.values(rules));
     logger.debug('[Content] Checking rules for:', { currentUrl, ruleFound: !!rule });
@@ -150,14 +185,7 @@ function applyRule() {
         logger.debug('[Content] No rule matched and page untouched. Leaving favicon as-is.');
       }
       // Tear down all polling/observation now that the extension is inactive.
-      if (observer) {
-        observer.disconnect();
-        observer = null;
-      }
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
+      stopWatching();
     }
   });
 }

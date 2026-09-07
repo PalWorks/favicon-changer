@@ -17,13 +17,13 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **280 tests across 11 files**, run time under two seconds.
+Current coverage: **302 tests across 12 files**, run time under two seconds.
 
 | File | Covers |
 |---|---|
 | `matcher.test.ts` | Every precedence tier and pair, within-tier specificity, prefix semantics, paused rules, the conflict detector, `patternMatches` |
-| `importRules.test.ts` | Whole-file rejects, per-rule validation, scheme allow-list, field rebuilding, metadata cleaning |
-| `validation.test.ts` | Regex and URL validity, the ReDoS length cap, the icon scheme allow-list, byte estimation |
+| `importRules.test.ts` | Whole-file rejects, per-rule validation, scheme allow-list, field rebuilding, metadata cleaning, and the summary the user is shown (`describeImport`, R-55) |
+| `validation.test.ts` | Regex validity, the ReDoS length cap, badge text length, the icon scheme allow-list, byte estimation |
 | `patterns.test.ts` | Regex escaping, prefix suggestion (including the Sheets case and `file:`), anchored regex suggestion |
 | `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
 | `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
@@ -31,13 +31,14 @@ Current coverage: **280 tests across 11 files**, run time under two seconds.
 | `ruleScope.test.ts` | The editor's scope machine: which match type is selected, what pattern it saves, and whether that pattern is valid. Asserts on event *sequences*, since every bug it exists to prevent was an interaction between two steps. Includes the R-42 and "Edit that rule instead" regressions as named cases |
 | `faviconObserver.test.ts` | Whose write a head mutation was (ADR-014): a page write on the element we own, our own write, a re-write of the same value, an appended icon link, unrelated head churn; plus the debounce, coalescing, settling after a re-apply, and disconnect |
 | `rating.test.ts` | The review prompt's decision: day keys in local time, defensive parsing of hand-edited storage, one count per day, and that a dismissal is permanent |
+| `support.test.ts` | What the support mail says (ADR-017): the browser read off a user agent with Edge before Chrome, every diagnostic line, the instructions adapting to the logging state, and the 2000-character cap holding without losing the browser name |
 | `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), which link is chosen when a page has several (R-45), the no-op write, stale-link removal, pages with no icon link, original-icon capture and its preference for the real favicon over an `apple-touch-icon` (R-44) |
 
 Table name: **test-files**
 
 `faviconDom.test.ts` is the only DOM test, and it opts in per file with a
 `// @vitest-environment jsdom` docblock rather than switching the whole suite, which keeps the
-other seven files running in plain Node. It asserts on the **identity** of the mutated element,
+other eleven files running in plain Node. It asserts on the **identity** of the mutated element,
 not just its final `href`: a replaced node ends up with the right `href` and still fails in a
 real browser, which is exactly the regression ADR-001 exists to prevent. Rewriting the function
 as remove-and-append turns 8 of its cases red, which was verified by doing it.
@@ -155,10 +156,36 @@ The extension is then fully live: `background.js` appears as a `service_worker` 
 | The tab's favicon | the `faviconUrl` field in `http://127.0.0.1:9222/json/list` | Chrome's favicon driver accepted the change |
 | The tab strip | screenshot the browser window (`import -window <id>` on X11) and look | What the user actually sees |
 
+Table name: **testing-signals**
+
 The DOM alone is not enough, and believing it is how R-45 survived: the DOM held our icon,
 `data-fc-modified` and all, while the tab strip still showed the site's own. Poll `faviconUrl`
 on a short interval to get a timeline rather than a single reading, since a background tab is not
 instantaneous.
+
+**`faviconUrl` is absent for a `data:` URL favicon.** Chrome 152 simply omits the field from
+`/json/list` when the tab's icon is a data URL, and every icon this extension generates is one. A
+test that compares it against a data URL therefore fails no matter what the product does. Verified
+by probing the field on a plain page (present, `http://.../red.png`) and on the same page with a
+data-URL rule applied (field missing entirely). **So to exercise signal 2, give the rule a network
+icon** (`http://127.0.0.1:8899/blue.png`), which is what proves Chrome's favicon driver accepted
+the change on a background tab. Signals 1 and 3 work for data URLs.
+
+### Harness traps, each of which produced a false failure
+
+Found while running the 2026-09-07 audit. Every one of these looked like a product bug first.
+
+| Trap | What happens | What to do |
+|---|---|---|
+| **A stale content script** | `npm run build` alone changes nothing in the browser: the loaded extension keeps serving the old `content.js`, so a content-script fix appears not to work. Cost most of an afternoon once | `chrome.runtime.reload()` in an extension context after every build, then re-open the test tabs |
+| **React's `onBlur`** | Dispatching `new FocusEvent('blur')` reaches no React handler, because React implements `onBlur` on top of the native **`focusout`**. A commit-on-blur field looks inert | Dispatch `focusout` with `bubbles: true`, or drive real focus |
+| **A single sample of an SPA** | A page rewriting its icon every 300ms against our 100ms debounce means a snapshot lands on the page's value about a third of the time | Sample on a short interval and assert on the fraction. 65 to 70% ours is the current healthy figure, against about 7% before R-43 |
+| **The wrong file input** | `input[type=file]` matches the rules-import input first. Feeding it a PNG raises a blocking `alert()` that stalls everything after it | Select `input[type=file][accept*="image"]`, and open the Upload section first, since it only exists while that accordion is open |
+| **A blocking dialog** | `alert()` and `confirm()` freeze the page and every later `Runtime.evaluate` times out | `Page.enable`, then answer `Page.javascriptDialogOpening` with `Page.handleJavaScriptDialog`. Reading the message is also how the import summary gets asserted |
+| **The service worker target disappears** | An MV3 worker idles out, so a harness attached to it fails with `Cannot read properties of undefined` for reasons unrelated to the product | Use an extension **page** as the privileged context. Any of them has the same `chrome.storage` and `chrome.runtime` access |
+| **The badge section has two modes** | It opens in Color Overlay, where there is no badge-text field at all | Click "Notification Badge" first, then the `maxLength=3` input |
+
+Table name: **testing-harness-traps**
 
 **Leave the profile as you found it.** Clear `chrome.storage.local`, close the tabs you opened,
 and remove the unpacked extension, particularly when the profile is someone's daily browser and

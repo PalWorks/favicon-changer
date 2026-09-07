@@ -42,7 +42,7 @@ export const ensureContentScriptReady = async (tabId: number, retries = 3): Prom
         try {
             // Double check we are not trying to inject into a restricted tab
             const tab = await chrome.tabs.get(tabId);
-            
+
             // Check for restricted URLs
             if (isRestrictedUrl(tab.url)) {
                 logger.warn(`Skipping injection for restricted URL: ${tab.url}`);
@@ -51,7 +51,7 @@ export const ensureContentScriptReady = async (tabId: number, retries = 3): Prom
 
             // Check for file:// URLs without permission
             if (tab.url && tab.url.startsWith('file:')) {
-                const isAllowed = await new Promise<boolean>(resolve => 
+                const isAllowed = await new Promise<boolean>(resolve =>
                     chrome.extension.isAllowedFileSchemeAccess(resolve)
                 );
                 if (!isAllowed) {

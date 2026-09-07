@@ -1,7 +1,12 @@
-import { FaviconRule, GlobalSettings, MatchType, StorageData, TabInfo } from '../types';
+import { FaviconRule, GlobalSettings, StorageData, TabInfo } from '../types';
 import { validateImportedRules, RejectedRule } from './importRules';
 import { IS_DEV } from '../constants';
 import { logger } from './logger';
+import { sendMessageToTab, isRestrictedUrl } from './messaging';
+// The handoff key and its shape are shared with the service worker, so they
+// live in their own module rather than being declared twice.
+import { PENDING_TARGET_KEY, PendingEditorTarget } from './handoff';
+export type { PendingEditorTarget };
 
 const MOCK_STORAGE_KEY = 'favicon_flow_mock_storage';
 
@@ -156,16 +161,25 @@ export interface ImportReport {
   fatal?: string;
 }
 
+/**
+ * Downloads the rules map as JSON.
+ *
+ * A Blob rather than a `data:` URL, which is what this used to build. Every
+ * icon is stored inline as a data URL (ADR-004), so a heavy user's export is
+ * megabytes, and a `data:` href that size is where a browser quietly refuses
+ * the navigation. The same Blob pattern the log download already uses.
+ */
 export const exportRulesAsJson = async () => {
   const { rules } = await getStorageData();
-  // Export just the rules map
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(rules, null, 2));
-  const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `favicon-flow-rules-${new Date().toISOString().slice(0, 10)}.json`);
-  document.body.appendChild(downloadAnchorNode);
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
+  const blob = new Blob([JSON.stringify(rules, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `favicon-changer-rules-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 };
 
 export const importRulesFromJson = async (jsonString: string): Promise<ImportReport> => {
@@ -218,8 +232,6 @@ export const importRulesFromJson = async (jsonString: string): Promise<ImportRep
 
   return { success: true, count, remoteCount: outcome.remoteCount, rejected: outcome.rejected };
 };
-
-import { sendMessageToTab, isRestrictedUrl } from './messaging';
 
 /**
  * Tells open tabs that the rules changed.
@@ -415,21 +427,6 @@ export const getOpenTabs = async (): Promise<OpenTab[]> => {
 // every OS we hand the current target off to a real extension window, which
 // does NOT close on blur, and run the file picker there.
 
-const PENDING_TARGET_KEY = 'pendingEditorTarget';
-
-export interface PendingEditorTarget {
-  url: string;
-  domain: string;
-  favIconUrl: string;
-  scope: MatchType;
-  // The pattern, for the prefix and regex scopes whose matcher is not derived
-  // from the target page. Without this, handing off mid-edit would lose it.
-  matcher?: string;
-  // Optional: when the window is opened from the toolbar icon (not a Browse
-  // handoff) no section is pre-opened, mirroring the collapsed bubble.
-  section?: 'upload' | 'emoji' | 'badge';
-}
-
 export const setPendingEditorTarget = async (target: PendingEditorTarget): Promise<void> => {
   if (IS_DEV) {
     localStorage.setItem(PENDING_TARGET_KEY, JSON.stringify(target));
@@ -504,7 +501,7 @@ export const openOptionsPage = () => {
 export const isAllowedFileSchemeAccess = async (): Promise<boolean> => {
   if (IS_DEV) return true;
   return new Promise((resolve) => {
-    // chrome.extension.isAllowedFileSchemeAccess is the correct API, 
+    // chrome.extension.isAllowedFileSchemeAccess is the correct API,
     // but we should guard against it being undefined in some contexts.
     if (typeof chrome !== 'undefined' && chrome.extension && chrome.extension.isAllowedFileSchemeAccess) {
       chrome.extension.isAllowedFileSchemeAccess((isAllowed: boolean) => {

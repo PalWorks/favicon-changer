@@ -168,8 +168,11 @@ export const describeImport = (report: {
 
     if (report.remoteCount > 0) {
         lines.push('');
+        // "1 of them use" read as broken English in the one message a user is
+        // guaranteed to see after an import, so the verb agrees with the count.
+        const subject = report.remoteCount === 1 ? 'One of them uses' : `${report.remoteCount} of them use`;
         lines.push(
-            `${report.remoteCount} of them use a remote image URL, which is fetched from its own ` +
+            `${subject} a remote image URL, which is fetched from its own ` +
             'address every time the rule applies.'
         );
     }

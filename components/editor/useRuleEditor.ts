@@ -252,10 +252,24 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
     const editPattern = (text: string) => dispatchScope({ type: 'editPattern', text });
     const useSuggestedPattern = () => dispatchScope({ type: 'useSuggestion' });
 
+    // One timer, replaced rather than stacked: two saves in quick succession
+    // used to leave the first timeout running, which cleared the second
+    // message early. Also cleared on unmount, since the action popup is
+    // destroyed the moment it loses focus.
+    const statusTimer = useRef<number | null>(null);
+
     const flashStatus = (message: StatusMessage, ms: number) => {
         setStatusMessage(message);
-        setTimeout(() => setStatusMessage(null), ms);
+        if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
+        statusTimer.current = window.setTimeout(() => {
+            statusTimer.current = null;
+            setStatusMessage(null);
+        }, ms);
     };
+
+    useEffect(() => () => {
+        if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
+    }, []);
 
     /**
      * Re-targets the editor at the rule that would win, so the user can edit

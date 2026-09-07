@@ -24,6 +24,9 @@ and stored on your own device.
 - **⚡ Auto-compression**: icons are downscaled and compressed to fit the browser storage quota.
 - **🔁 Import / export**: back up or share your rules as JSON.
 - **🐞 Support logs**: opt-in verbose logging you can download and send when something breaks.
+- **✉️ Get help**: one click on the settings page composes a mail with your extension version,
+  browser and rule count already filled in. It opens in your own mail app; nothing is sent until
+  you press send.
 
 ---
 
@@ -87,7 +90,7 @@ Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 npm install
 npm run dev        # Vite dev server, React UI only, with a localStorage storage shim
 npm run build      # two-pass production build into dist/
-npm test           # 20 unit tests (vitest)
+npm test           # 302 unit tests (vitest)
 npm run check      # type check + tests, the quick gate
 npm run typecheck  # tsc --noEmit alone, not part of the build
 ```
@@ -115,6 +118,7 @@ of this code look wrong and are not, most of all the favicon write path, which i
 | [docs/DOMAIN.md](docs/DOMAIN.md) | Rules, match precedence, vocabulary, invariants |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why the code is shaped this way, and what breaks if reversed |
 | [docs/PLAYBOOK.md](docs/PLAYBOOK.md) | Build, debug, release, roll back |
+| [docs/PUBLISHING.md](docs/PUBLISHING.md) | Store submissions: Chrome, and the paused Edge and Firefox plans |
 | [docs/TESTING.md](docs/TESTING.md) | Test strategy and the manual checklist |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | Triaging user reports |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, CSP, permission justifications |

@@ -18,15 +18,11 @@ export const isValidRegex = (pattern: string): boolean => {
     }
 };
 
-export const isValidUrl = (url: string): boolean => {
-    try {
-        new URL(url);
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
+// There is deliberately no general isValidUrl() here any more. It answered
+// "does new URL() parse this", which is true of javascript: and data:text/html
+// as well, and it was being used to guard the icon-URL field while imported
+// rules were held to the stricter isAllowedFaviconUrl() below. One of them had
+// to go, and it was the weaker one. Removed 2026-09-07.
 export const isValidBadgeText = (text: string): boolean => {
     // Limit badge text to 3 characters. That matches the editor input
     // (maxLength=3) and is about all that stays legible on a 16px favicon badge.

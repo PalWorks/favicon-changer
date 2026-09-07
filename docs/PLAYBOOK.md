@@ -114,6 +114,10 @@ launches Chrome with `--remote-debugging-port=9223` against a separate profile
 
 ## 6. Release to the Chrome Web Store
 
+Step by step for every store, with the listing copy, is in
+[PUBLISHING.md](PUBLISHING.md). Chrome is the only channel in use; Edge and Firefox are paused by
+decision (ADR-018).
+
 The shipped version number is **`public/manifest.json`**. Keep `package.json` equal to it.
 
 ```bash
@@ -135,15 +139,21 @@ cd dist && zip -r ../favicon-changer-ultimate-v<VERSION>.zip . && cd ..
 unzip -l favicon-changer-ultimate-v<VERSION>.zip | head
 ```
 
-A correct archive looks like this (16 entries, `manifest.json` at top level):
+A correct archive is 16 entries, 14 files plus two directory records, with `manifest.json` at the
+top level. v1.4.3 is 159KB:
 
 ```
 index.html  options.html  manifest.json
 popup.js  options.js  background.js  content.js
-assets/…  icons/16.png  icons/48.png  icons/128.png  icons/FaviconChangerLogo.png
+assets/ErrorBoundary.css  assets/ErrorBoundary-<hash>.js  assets/handoff-<hash>.js
+icons/16.png  icons/48.png  icons/128.png  icons/logo.png
 ```
 
 If `manifest.json` sits inside a `dist/` folder in the zip, the store rejects the upload.
+
+**Verify the archive itself, not just `dist/`:** unzip it somewhere clean and load *that* unpacked,
+so what is checked is the artefact being uploaded. The two are meant to be identical and a check
+that assumes it proves nothing.
 
 6. Upload at the [Developer Dashboard](https://chrome.google.com/webstore/devconsole) for item
    `egedbdckafdbomehjaihjhbcgmngmlah`.

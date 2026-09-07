@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-import { isValidFileType, isValidFileSize, isValidUrl } from '../../utils/validation';
+import { isValidFileType, isValidFileSize, isAllowedFaviconUrl } from '../../utils/validation';
 import { compressFaviconDataUrl, normalizeImageDataUrl } from '../../utils/canvas';
 import { Button } from '../Button';
 import { Accordion } from '../Accordion';
@@ -194,12 +194,15 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
 
     const handleUrlApply = async () => {
         if (!customUrl) return;
-        if (!isValidUrl(customUrl)) {
-            onError('Invalid URL format.');
+        // The same guard imported rules are held to, rather than "does new URL()
+        // parse this": that accepted any scheme at all, so a typed rule could be
+        // saved with something an imported one would have been rejected for.
+        if (!isAllowedFaviconUrl(customUrl.trim())) {
+            onError('Paste an image address starting with https:// or http://');
             return;
         }
         try {
-            await onSave(customUrl, 'url', {});
+            await onSave(customUrl.trim(), 'url', {});
             setCustomUrl('');
         } catch (e) {
             logger.error('URL apply failed:', e);

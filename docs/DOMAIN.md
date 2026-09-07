@@ -89,13 +89,16 @@ Consequences that surprise people:
 ### Resolution order at runtime
 
 ```
-excluded domain?         -> do nothing at all (highest authority of any setting)
-exact_url rule hit?      -> use it
-regex rule hit?          -> use it
-domain rule hit?         -> use it
+excluded domain?         -> touch nothing, and undo our own work if we had already
+                            applied a rule in this page's lifetime
+highest scoring rule?    -> use it. Score is tier first, matcher length second:
+                              exact_url (4) > prefix (3) > regex (2) > domain (1)
 global defaultFaviconUrl set? -> use it
 otherwise                -> restore the page's original icon if we had changed it, else nothing
 ```
+
+The four tiers are not scanned in order; every matching rule is scored and the highest wins, so a
+longer matcher beats a shorter one of the same type. See `utils/matcher.ts`, and §2 above.
 
 ### Conflict warning
 
@@ -156,7 +159,7 @@ browser can decode. Repair runs once up front and again as a retry on image load
 | **Exclusion** | A hostname on `excludedDomains`. Stronger than any rule. |
 | **Paused** | A rule with `enabled: false`. Invisible to matching, still listed and editable. |
 | **Hand-off** | Passing the edit target from the popup to the standalone window via `pendingEditorTarget`. |
-| **Change mark** | The `data-fc-modified` attribute marking the `<link>` we own, so the observer ignores our own writes. |
+| **Change mark** | The `data-fc-modified` attribute marking the `<link>` we own. It is how we find our own link again and which links to remove on restore. It is **not** how the observer tells our writes from the page's; that is a value comparison (ADR-014). |
 
 Table name: **glossary**
 
@@ -166,14 +169,19 @@ Table name: **glossary**
 
 Things that must stay true. Breaking one of these is a bug even if tests pass.
 
-1. **An excluded domain is never touched.** No DOM read or write, no observer, no interval.
+1. **An excluded domain is never touched.** No DOM read or write, no observer, no interval. The
+   check runs before the icon capture for exactly this reason. The one exception is deliberate: if
+   a domain is excluded *while* a rule of ours is applied, the page's original icon is restored and
+   everything torn down, rather than leaving our icon behind until the next reload.
 2. **A page with no matching rule and no prior modification by us is never touched.**
 3. **Only the content script context mutates page DOM.** In practice that means `content.ts` and
    `utils/faviconDom.ts`, which it alone imports. No other file and no other context may.
 4. **The tracked `<link>` element is mutated in place, never replaced**, or background tabs stop
    updating. See [ARCHITECTURE.md](ARCHITECTURE.md) §3.
-5. **Our own DOM writes never trigger a re-apply**, they carry `data-fc-modified` and the
-   observer skips marked elements.
+5. **Our own DOM writes never trigger a re-apply.** The observer decides that by comparing the
+   `href` it sees against the one we asked for, **not** by looking for our marker: the element an
+   SPA rewrites is usually the very element we marked, so skipping marked elements skipped the
+   case that matters (ADR-014, ROADMAP R-43).
 6. **Every rule has a unique `id`, and `rules` is keyed by that same `id`.**
 7. **A paused rule never matches and never shadows.** Both fall out of one check in
    `scoreRule`; do not add a second path that bypasses it.

@@ -36,6 +36,7 @@ Table name: **docs-by-question**
 | Rule matching and precedence | [utils/matcher.ts](utils/matcher.ts), [utils/matcher.test.ts](utils/matcher.test.ts) | DOMAIN §2, ROADMAP R-01/R-02/R-04 |
 | Storage, migration, import/export | [utils/storage.ts](utils/storage.ts) | ARCHITECTURE §6, ADR-004/005, SECURITY threats 1 to 3 |
 | Messaging and injection | [utils/messaging.ts](utils/messaging.ts) | ARCHITECTURE §5, ADR-008 |
+| Popup to window handoff contract | [utils/handoff.ts](utils/handoff.ts) | ADR-007, ROADMAP R-59 |
 | OS popup workaround | [background.ts](background.ts), `openExpandedEditor` in storage.ts | ARCHITECTURE §7, ADR-007, RUNBOOK "upload does nothing" |
 | Editor markup | [components/FaviconEditor.tsx](components/FaviconEditor.tsx), [components/editor/](components/editor/) | ADR-010, ROADMAP R-15 |
 | Editor behaviour | [components/editor/useRuleEditor.ts](components/editor/useRuleEditor.ts) | ADR-010, ROADMAP R-15 |

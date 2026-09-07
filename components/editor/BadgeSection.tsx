@@ -71,9 +71,9 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
                 // No crossOrigin needed for local blob URL
                 img.src = objectUrl;
 
-                await new Promise((resolve, reject) => { 
-                    img.onload = resolve; 
-                    img.onerror = reject; 
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
                 });
 
                 const canvas = document.createElement('canvas');
@@ -106,7 +106,7 @@ export const BadgeSection: React.FC<BadgeSectionProps> = ({ isOpen, onToggle, so
         };
 
         generate();
-        
+
         return () => {
              if (objectUrl) {
                 URL.revokeObjectURL(objectUrl);

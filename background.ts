@@ -1,11 +1,11 @@
 import { logger } from './utils/logger';
 import { popupClosesOnFileDialog } from './utils/platform';
+import { PENDING_TARGET_KEY, PendingEditorTarget } from './utils/handoff';
 
 logger.info('Background Service Worker Loaded');
 
 const EDITOR_BASE_URL = chrome.runtime.getURL('index.html');
 const EDITOR_WINDOW_URL = chrome.runtime.getURL('index.html?expanded=1');
-const PENDING_TARGET_KEY = 'pendingEditorTarget';
 
 // Decide whether the icon opens the bubble (default_popup) or fires onClicked
 // (which we use to open a window). Runs on SW wake, install, and browser start.
@@ -45,7 +45,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.action.onClicked.addListener(async (tab) => {
     try {
         if (tab?.url && /^https?:/i.test(tab.url)) {
-            const target = {
+            const target: PendingEditorTarget = {
                 url: tab.url,
                 domain: new URL(tab.url).hostname,
                 favIconUrl: tab.favIconUrl || '',

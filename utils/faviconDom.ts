@@ -13,8 +13,11 @@ import { logger } from './logger';
  * Imported only by the content script. No other execution context may use it.
  */
 
-// Marks the link element we own, so the MutationObserver in content.ts can
-// ignore our own writes instead of reacting to them.
+// Marks the link element we own. Two uses: finding our own link again on a
+// re-apply, and knowing which links to remove when there is no original icon to
+// restore. It is deliberately NOT how the observer tells our writes from the
+// page's, which is a comparison of the href value (ADR-014, ROADMAP R-43): the
+// element an SPA rewrites is usually the very element we marked.
 export const CHANGE_MARK = 'data-fc-modified';
 
 // rel values that contain the string "icon" but are never the tab-strip

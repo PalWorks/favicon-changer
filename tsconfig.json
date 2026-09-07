@@ -10,6 +10,21 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
+    // Turned on 2026-09-07 during the pre-release audit. The codebase already
+    // passed every one of these, so they cost nothing today and stop a
+    // regression tomorrow: `strict` alone covers strictNullChecks and
+    // noImplicitAny, which is what AGENTS.md asks for in prose.
+    //
+    // Deliberately NOT enabled, having been measured: exactOptionalPropertyTypes
+    // (8 errors, mostly `enabled?: boolean` being deleted rather than set to
+    // undefined, which is the storage shape we want) and noUncheckedIndexedAccess
+    // (52 errors, almost all array indexing that is already guarded by a length
+    // check the compiler cannot see). Both would be churn, not safety.
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "types": [
       "node",
       "chrome"
