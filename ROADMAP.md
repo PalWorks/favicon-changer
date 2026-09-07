@@ -156,7 +156,7 @@ Table name: **roadmap-standing**
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
-| Runtime verification | Items 1 to 6 of docs/TESTING.md plus 67 checks from the 2026-09-07 audit, driven over the DevTools protocol against a real Chrome |
+| Runtime verification | Items 1 to 6 of docs/TESTING.md plus 72 assertions from the 2026-09-07 audit, driven over the DevTools protocol against a real Chrome |
 | Security contact | support@palworks.ai |
 
 Table name: **product-snapshot**
@@ -437,8 +437,10 @@ on a background Wikipedia tab now restores `favicon/wikipedia.ico` in about a se
 
 ## The 2026-09-07 pre-release audit
 
-A full read of every source file, a dependency and secret scan, then 67 checks driven against the
-loaded extension in a real Chrome. R-50 to R-60 are what it found. Nine were defects in shipped
+A full read of every source file, a dependency and secret scan, then 72 assertions driven against
+the loaded extension in a real Chrome, in ten suites: core matching and repaint, the three
+verification signals, exclusions, the settings page's inputs, the editor's save paths, import,
+badge and file upload, export, surface health, and the packaged archive itself. R-50 to R-60 are what it found. Nine were defects in shipped
 behaviour, and none of them had a failing test: seven were in code paths no unit test could reach
 (a browser input, a download, a clipboard), and two were in code with no tests at all.
 
