@@ -3,7 +3,7 @@
  */
 
 // Cap pattern length as a cheap, partial guard against catastrophic-backtracking
-// (ReDoS) regexes — JavaScript has no regex execution timeout, so we can't fully
+// (ReDoS) regexes. JavaScript has no regex execution timeout, so we can't fully
 // prevent it. Patterns here are user-created or self-imported, so the residual
 // risk is low; this just rejects absurdly long patterns outright.
 const MAX_REGEX_LENGTH = 2000;
@@ -28,8 +28,8 @@ export const isValidUrl = (url: string): boolean => {
 };
 
 export const isValidBadgeText = (text: string): boolean => {
-    // Limit badge text to 3 characters — matches the editor input (maxLength=3)
-    // and is about all that stays legible on a 16px favicon badge.
+    // Limit badge text to 3 characters. That matches the editor input
+    // (maxLength=3) and is about all that stays legible on a 16px favicon badge.
     return text.length <= 3;
 };
 

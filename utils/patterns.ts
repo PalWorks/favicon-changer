@@ -8,6 +8,20 @@
  * the URL changes between sheets.
  */
 
+/**
+ * Whether the user typed a real scheme, rather than something that merely looks
+ * like one before the first colon.
+ *
+ * The `//` is load-bearing. Testing for `scheme:` alone treats `localhost:3000`
+ * as a URL in the `localhost:` scheme, which parses to an empty host and a path
+ * of `3000`, and the prefix suggestion built from that was `localhost:///3000`:
+ * nonsense that then passed prefix validation, because it does contain
+ * `scheme://`. A developer tool whose audience types port numbers cannot get
+ * that wrong. Every scheme this extension deals with (http, https, file, ftp,
+ * chrome-extension) carries the `//`.
+ */
+export const hasExplicitScheme = (value: string): boolean => /^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim());
+
 /** Escapes a string so a RegExp matches it literally. */
 export const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -50,6 +64,34 @@ export const suggestPrefix = (rawUrl: string): string => {
 export const suggestRegex = (rawUrl: string): string => `^${escapeRegex(suggestPrefix(rawUrl))}`;
 
 /**
+ * Whether a hostname the URL parser produced is one a page could actually have.
+ *
+ * The parser is not a validator, and the two disagree across engines. Chrome
+ * silently percent-encodes characters that are illegal in a host, so
+ * `new URL('https://not a url at all').hostname` is
+ * `'not%20a%20url%20at%20all'` there, while Node throws on the same input. That
+ * divergence let the settings page save a "domain" rule whose matcher could
+ * never equal any real `location.hostname`: junk in the rules list, and
+ * invisible to the test suite because the tests run in Node, where the input
+ * never got that far. Found by driving the real browser (ROADMAP R-49).
+ *
+ * So the shape is checked here rather than inferred from the parser not
+ * throwing. Internationalised domains are safe: the parser returns punycode
+ * (`xn--`), so the value being checked is always ASCII by this point.
+ */
+export const looksLikeHostname = (host: string): boolean => {
+    if (!host) return false;
+    // A percent sign means the parser had to escape something that is not
+    // allowed in a host, which means it was not a host.
+    if (host.includes('%')) return false;
+    // An IPv6 literal arrives bracketed and already validated by the parser.
+    if (host.startsWith('[')) return true;
+    // Every dot-separated label has to exist: '...', 'a..b' and '.com' are not
+    // addresses, and a rule carrying one can never match anything.
+    return host.split('.').every(label => label.length > 0);
+};
+
+/**
  * Best-effort hostname for something a user typed, which may be a bare domain
  * ("example.com") rather than a full URL. Returns '' when nothing usable can be
  * read, so callers can treat it as "no target yet" instead of catching.
@@ -58,7 +100,8 @@ export const hostnameFromInput = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return '';
     try {
-        return new URL(/^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`).hostname;
+        const host = new URL(hasExplicitScheme(trimmed) ? trimmed : `https://${trimmed}`).hostname;
+        return looksLikeHostname(host) ? host : '';
     } catch (e) {
         return '';
     }

@@ -1,6 +1,6 @@
 // This file is the Content Script. 
 
-import { FaviconRule, GlobalSettings, StorageData } from './types';
+import { GlobalSettings, StorageData } from './types';
 import { logger } from './utils/logger';
 import { findBestRule } from './utils/matcher';
 import { MAX_STABLE_CHECKS } from './constants';
@@ -100,7 +100,7 @@ function restoreOriginalFavicon() {
 
 // Initial Load Logic. Also re-run on RulesUpdated; updateFavicon() mutates the
 // tracked icon link's href in place, which repaints the tab (active OR
-// background) without a page reload — see the note on updateFavicon().
+// background) without a page reload; see the note on updateFavicon().
 function applyRule() {
   captureOriginalFavicon();
 

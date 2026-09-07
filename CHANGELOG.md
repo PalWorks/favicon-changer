@@ -12,6 +12,30 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ---
 
+## [1.4.3]: 2026-09-07
+
+### Fixed
+- **"Edit that rule instead" edited the wrong rule.** On the warning that another rule takes
+  precedence, the button that offers to edit that rule instead dropped you into editing a *wider*
+  rule than the one named, and saving created a second rule rather than changing the first. It now
+  opens exactly the rule it names.
+- **Switching between "URL Starts With" and "Regex" no longer discards what you typed.** Each
+  keeps its own text, so going back and forth is safe.
+- **A pattern typed for a local address now works.** `localhost:3000/app` was read as though
+  `localhost` were the protocol, which produced a nonsense suggestion. It now gives
+  `https://localhost:3000/app`, and a domain rule for it reads the host correctly.
+- **The settings page no longer saves a rule from something that is not an address.** Typing
+  arbitrary text with Entire Domain selected used to save a rule that could never match anything;
+  it now says so and saves nothing.
+
+### Changed
+- "Suggest from this page" is shown only when it would actually change the pattern.
+- The rule editor was rebuilt internally: the same screen, with its logic separated from its
+  markup and covered by tests for the first time. No change to what it does, beyond the fixes
+  above.
+
+---
+
 ## [1.4.2]: 2026-09-06
 
 ### Added

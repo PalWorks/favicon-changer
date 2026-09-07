@@ -22,8 +22,8 @@ changes.
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 41 | Shipped and verified, latest 2026-09-06 in v1.4.2 |
-| Next up | 2 | R-15 and R-39 |
+| Done | 43 | Shipped and verified, latest 2026-09-07 in v1.4.3 |
+| Next up | 1 | R-39, which needs real UI captures |
 | Pending | 4 | R-46 needs a decision; R-22, R-23, R-24 are projects |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
@@ -76,6 +76,8 @@ Dated 2026-09-02 unless the row says otherwise.
 | R-36 | Icon artwork oversized | S | (2026-09-06) `128.png` regenerated from the 497px master at 94x96 inside the 128 canvas, the ~96x96 Chrome asks for. 22 KB to 15 KB |
 | R-48 | Unit-test the observer's re-apply predicate | S | (2026-09-06) Extracted to `utils/faviconObserver.ts` and covered by 13 tests. Reintroducing the R-43 bug turns 5 of them red, verified by doing it |
 | R-47 | Rating prompt | S | (2026-09-06) One ask after four days of real use, permanent dismissal, no sentiment gating (ADR-015). 18 tests. Verified in the loaded extension on both surfaces |
+| R-15 | Extract the editor's logic into a hook | M | (2026-09-07) 771 lines down to 213 of markup over a hook and a pure reducer. An unedited pattern is now derived, not stored (ADR-016), which removed two pieces of state, one effect, and a corruption bug in "Edit that rule instead" reproduced in a real browser against both builds. 52 new tests |
+| R-49 | A junk domain rule could be saved | S | (2026-09-07) Chrome percent-encodes illegal host characters where Node throws, so "not a url at all" saved a rule that could match nothing. Hostname shape is checked now, and `localhost:3000` reads as a host and port rather than a scheme |
 
 Table name: **roadmap-done**
 
@@ -83,7 +85,6 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | Status | Why now |
 |---|---|---|---|---|
-| R-15 | Extract the editor's logic into a hook | M | **pending** | R-01 and R-02 added state to an already 600-line component |
 | R-39 | Store screenshots | S | **pending** | Blocks a listing update. Real captures are now scriptable: the extension can be driven in a real browser (docs/TESTING.md) |
 
 Table name: **roadmap-next**
@@ -125,12 +126,12 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.4.2 (manifest and `package.json` aligned) |
+| Version | 1.4.3 (manifest and `package.json` aligned) |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
 | Users | 983 |
 | Rating | 4.4 ★ from 7 ratings |
 | Category | Developer Tools |
-| Tests | 221 across 10 files, including jsdom locks on both the favicon write path and the observer |
+| Tests | 280 across 11 files, including jsdom locks on the favicon write path and the observer, and a pure reducer for the editor's scope logic |
 | `tsc --noEmit` | clean |
 | Pre-push gate | typecheck + tests + build + production-scope `npm audit` via `.githooks/pre-push` (no CI workflow, ADR-012) |
 | CI | none. Dependabot raises dependency pull requests; it runs on GitHub's infrastructure, not Actions |
@@ -413,6 +414,31 @@ fixed by the same preference used for R-45. Four new jsdom cases. Verified live:
 on a background Wikipedia tab now restores `favicon/wikipedia.ico` in about a second, and the
 `apple-touch-icon` link is still there afterwards.
 
+### R-49 · A junk domain rule could be saved · **S** · ✅ done 2026-09-07
+Found while auditing R-15 in a real browser. Typing "not a url at all" on the settings page with
+Entire Domain selected saved a rule whose matcher was `not%20a%20url%20at%20all`: a string no
+`location.hostname` can ever equal, so the rule sat in the list matching nothing.
+
+The cause is a genuine engine difference, and a hazard for this whole test suite.
+`new URL('https://not a url at all')` **throws in Node and succeeds in Chrome**, which
+percent-encodes the characters that are illegal in a host instead. `hostnameFromInput()` treated
+"the parser did not throw" as "this is a hostname", so the guard held in the tests and not in the
+product. Recorded in [docs/TESTING.md](docs/TESTING.md), since it applies to anything that leans
+on `URL` parsing.
+
+Fixed by checking the shape of the parsed hostname (`looksLikeHostname`) rather than inferring it:
+no percent-encoding, and no empty labels, so `...`, `a..b` and `.com` are rejected too. Both cases
+now produce the "Could not read a domain from that address." error the code already had ready, and
+save nothing.
+
+The same audit found a second parser trap in the other direction. "Has a scheme" was tested as
+`scheme:`, so `localhost:3000/app` parsed as the `localhost:` scheme with an empty host and a path
+of `3000/app`, and the prefix suggestion built from it was `localhost:///3000`, which then passed
+prefix validation because it does contain `scheme://`. A scheme now means `scheme://`
+(`hasExplicitScheme`), so a developer typing a local address gets `https://localhost:3000/app` as
+a prefix and `localhost` as a domain. This extension is listed under Developer Tools; its users
+type port numbers.
+
 ### R-42 · Prefix and regex prefill never followed the address field · **S** · ✅ done 2026-09-06
 `selectScope` built the suggested pattern from whatever URL was known at the moment the scope
 button was clicked, and nothing regenerated it afterwards. On the settings page the URL field
@@ -503,24 +529,53 @@ side effect.
 Still untested, and now cheaper than before: the do-nothing guard (ADR-002) and the self-stopping
 poller, both of which need `chrome.storage` stubbed around `content.ts` itself.
 
-### R-15 · Extract the editor's logic into a hook · **M**
-[FaviconEditor.tsx](components/FaviconEditor.tsx) is 771 lines, up from ~520 when this was
-written, with a `mode` x `context` matrix and effects that must not fire in the wrong combination
-(ADR-010). R-01, R-02, R-41 and R-42 have all added state to it since.
+### R-15 · Extract the editor's logic into a hook · **M** · ✅ done 2026-09-07
+`FaviconEditor.tsx` was 771 lines of state, effects and markup in one scope, with a
+`mode` x `context` matrix whose effects must not fire in the wrong combination (ADR-010). R-01,
+R-02, R-41 and R-42 had each added state to it. It held the save path for every rule the product
+creates and had no tests, because logic and markup could not be separated to test either.
 
-The case for doing it is that the component is now the single most likely place for a defect to
-hide: it holds nine pieces of state, five effects whose correctness depends on `mode` and
-`context`, and the save path for every rule the product creates. R-42 was exactly that kind of
-defect, a suggestion regenerated in one code path and not in the other, and it survived review
-because the rule about when the draft is rebuilt is spread across four call sites rather than
-stated once. Extracting `useFaviconRuleEditor()` puts that rule in one testable place and lets the
-editor's logic be unit tested at all, which today it cannot be.
+It was framed as a refactor with no user-visible benefit. That turned out to be wrong: doing it
+found and removed a real bug, described below.
 
-The case against doing it now is that it is a pure refactor with no user-visible benefit, on the
-component most recently changed and manually validated, and its riskiest part (the effect matrix)
-is the part a test suite does not yet cover. The safe order is therefore: cover the behaviour
-first, or split out the presentational pieces and the pure derivations only, and leave the effects
-until there is something to catch a mistake in them.
+**Shape.** Three layers instead of one file.
+
+| Layer | File | Why |
+|---|---|---|
+| Scope and pattern rules | [utils/ruleScope.ts](utils/ruleScope.ts) | Pure reducer plus derivations. No React, no chrome.*. 52 tests |
+| Plumbing | [components/editor/useRuleEditor.ts](components/editor/useRuleEditor.ts) | chrome.* calls, the mode/context lifecycle, the save path |
+| Markup | [components/FaviconEditor.tsx](components/FaviconEditor.tsx) | 213 lines. Draws; decides nothing |
+
+Table name: **r15-layers**
+
+Presentational pieces came out too: `ScopeSelector`, `PatternField`, `EditorHeader` and
+`ConflictBanner`, each taking plain props.
+
+**The decision that made it worth doing (ADR-016).** An unedited pattern is now *derived* from the
+current target rather than stored in state. Storing it meant synchronising it from five different
+places, and that synchronisation is where every editor bug has come from. Deriving it removed two
+pieces of state (`patternDraftFor`, `patternEdited`) and the sync effect R-42 had added.
+
+**The bug it found.** The R-42 fix had broken "Edit that rule instead" on the conflict banner. The
+button wrote the winning rule's matcher into the draft, the address field followed it, and the new
+sync effect then replaced the matcher with the suggestion derived from it. For a prefix rule that
+suggestion is strictly shorter, so clicking the button dropped the user into editing a *wider*
+rule than the one they clicked, and saving it created a second rule rather than editing the first.
+Reproduced in a real browser on both builds: the old one shows `https://other.test/a` in the
+pattern field while the address field says `https://other.test/a/b`; the new one shows the matcher
+unchanged. It is impossible now by construction, since a saved matcher is an override and nothing
+but the user writes to that slot.
+
+**Also fixed along the way.** Switching prefix to regex and back no longer discards the user's
+prefix text, which the old single-slot draft did despite a comment promising otherwise. A bare
+domain typed on the settings page now yields `https://google.com/` rather than a suggestion that
+failed its own validation. "Suggest from this page" appears only when it would change something.
+
+**Verified in the loaded extension**, not only by unit test: the pattern following the address and
+holding the user's edits; all four save paths; loading and re-saving an existing rule (same id,
+`createdAt` preserved, no duplicate); the conflict switch; every error path announcing assertively
+and saving nothing; the popup at 400x600 with four 79px scope buttons and no clipping; and a
+background tab's favicon still changing without a reload.
 
 ### R-29 · Clean the build config · **S** · ✅ done 2026-09-02
 Remove the unused `loadEnv`/`env` and the empty `define: {}` in `vite.config.ts` (L-28).

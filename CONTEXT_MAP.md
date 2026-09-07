@@ -36,7 +36,9 @@ Table name: **docs-by-question**
 | Storage, migration, import/export | [utils/storage.ts](utils/storage.ts) | ARCHITECTURE §6, ADR-004/005, SECURITY threats 1 to 3 |
 | Messaging and injection | [utils/messaging.ts](utils/messaging.ts) | ARCHITECTURE §5, ADR-008 |
 | OS popup workaround | [background.ts](background.ts), `openExpandedEditor` in storage.ts | ARCHITECTURE §7, ADR-007, RUNBOOK "upload does nothing" |
-| Editor UI | [components/FaviconEditor.tsx](components/FaviconEditor.tsx), [components/editor/](components/editor/) | ADR-010, ROADMAP R-15 |
+| Editor markup | [components/FaviconEditor.tsx](components/FaviconEditor.tsx), [components/editor/](components/editor/) | ADR-010, ROADMAP R-15 |
+| Editor behaviour | [components/editor/useRuleEditor.ts](components/editor/useRuleEditor.ts) | ADR-010, ROADMAP R-15 |
+| Scope, pattern and matcher rules | [utils/ruleScope.ts](utils/ruleScope.ts), [utils/ruleScope.test.ts](utils/ruleScope.test.ts) | ADR-016, ROADMAP R-42/R-15 |
 | Icon generation, compression, MIME repair | [utils/canvas.ts](utils/canvas.ts) | DOMAIN §3 |
 | Options page | [Options.tsx](Options.tsx), [components/options/](components/options/) | ARCHITECTURE §1 |
 | Logging | [utils/logger.ts](utils/logger.ts) | ADR-009, RUNBOOK, SECURITY data rule 4 |

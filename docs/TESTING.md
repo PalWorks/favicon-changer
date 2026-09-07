@@ -17,7 +17,7 @@ The highest-value target is tier 1, because rule matching is where user-visible 
 lives and it needs no browser at all. `utils/matcher.ts` was written free of Chrome API calls
 specifically so it can be tested this way, keep it that way.
 
-Current coverage: **221 tests across 10 files**, run time under two seconds.
+Current coverage: **280 tests across 11 files**, run time under two seconds.
 
 | File | Covers |
 |---|---|
@@ -28,6 +28,7 @@ Current coverage: **221 tests across 10 files**, run time under two seconds.
 | `canvas.test.ts` | `normalizeImageDataUrl`, the SVG-mislabelled-as-PNG repair |
 | `messaging.test.ts` | `isRestrictedUrl`, the gate in front of every injection |
 | `storage.test.ts` | The v1 format migration, its latch, settings defaults, storage usage |
+| `ruleScope.test.ts` | The editor's scope machine: which match type is selected, what pattern it saves, and whether that pattern is valid. Asserts on event *sequences*, since every bug it exists to prevent was an interaction between two steps. Includes the R-42 and "Edit that rule instead" regressions as named cases |
 | `faviconObserver.test.ts` | Whose write a head mutation was (ADR-014): a page write on the element we own, our own write, a re-write of the same value, an appended icon link, unrelated head churn; plus the debounce, coalescing, settling after a re-apply, and disconnect |
 | `rating.test.ts` | The review prompt's decision: day keys in local time, defensive parsing of hand-edited storage, one count per day, and that a dismissal is permanent |
 | `faviconDom.test.ts` | The favicon write path: element identity (ADR-001), which link is chosen when a page has several (R-45), the no-op write, stale-link removal, pages with no icon link, original-icon capture and its preference for the real favicon over an `apple-touch-icon` (R-44) |
@@ -40,6 +41,15 @@ other seven files running in plain Node. It asserts on the **identity** of the m
 not just its final `href`: a replaced node ends up with the right `href` and still fails in a
 real browser, which is exactly the regression ADR-001 exists to prevent. Rewriting the function
 as remove-and-append turns 8 of its cases red, which was verified by doing it.
+
+**The `URL` parser is not the same in Node and in Chrome, and the difference is a trap.**
+`new URL('https://not a url at all')` throws here and *succeeds* in the browser, which
+percent-encodes the characters that are illegal in a host. Any code that treats "the parser did
+not throw" as "this input was valid" will therefore pass in this suite and fail in the product,
+which is exactly what R-49 was: a domain rule saved with the matcher
+`not%20a%20url%20at%20all`. Validate the shape of what the parser returns
+(`looksLikeHostname()`), and test the validator directly rather than through the parser, because
+in Node the input never reaches it.
 
 The stubbing pattern for `storage.test.ts` is worth knowing: `chrome` must be stubbed **before**
 the module is imported, because `constants.ts` computes `IS_DEV` from the presence of

@@ -99,6 +99,13 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
 - **Keep GitHub Actions usage minimal.** Checks run in a local pre-push hook by decision; do not
   add a workflow without asking. ADR-012. `.github/dependabot.yml` is not a workflow, it runs on
   GitHub's own infrastructure and consumes no Actions minutes, which is why it is allowed.
+- **Editor logic does not go in `FaviconEditor.tsx`.** That file draws. Behaviour goes in
+  `components/editor/useRuleEditor.ts`, and anything about what a rule *matches* goes in
+  `utils/ruleScope.ts`, which is pure and tested. Never store a derived pattern in state; see
+  ADR-016 for the three bugs that came from doing so.
+- **`new URL()` not throwing does not mean the input was valid.** Chrome percent-encodes illegal
+  host characters where Node throws, so a guard that leans on the parser passes the tests and
+  fails in the product (R-49). Check the shape of what comes back.
 - **Never trust the DOM alone when changing the favicon write path.** The DOM can hold your icon
   while the tab strip still shows the site's. Check the tab's `faviconUrl` over the DevTools
   protocol, and for anything load-bearing, screenshot the window. ADR-001, ADR-014,
@@ -109,7 +116,7 @@ imported by the IIFE content script **and** unit-tested in plain Node, keep it p
 ## 5. Definition of done
 
 ```bash
-npm run check         # typecheck + 221 tests, both must pass; add tests for logic you added
+npm run check         # typecheck + 280 tests, both must pass; add tests for logic you added
 npm run build         # must produce dist/ with both passes
 ```
 

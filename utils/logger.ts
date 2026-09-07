@@ -42,7 +42,7 @@ const ensureInit = (): Promise<void> => {
                     enabledCache = !!changes[LOG_ENABLED_KEY].newValue;
                 }
             });
-        } catch { /* onChanged unavailable in this context — ignore */ }
+        } catch { /* onChanged unavailable in this context, ignore */ }
     }
     return initPromise;
 };

@@ -274,3 +274,12 @@ every rule change, and it surfaced while testing: after a `chrome.runtime.reload
 tab picked up a new rule and background tabs did not. Users see it only after an update from the
 store, and only until they touch the tab.
 
+### L-35 · The URL parser accepted a hostname the browser had escaped · *resolved 2026-09-07, R-49 done*
+`hostnameFromInput()` treated `new URL()` not throwing as proof that the input was a hostname.
+Chrome percent-encodes characters that are illegal in a host rather than throwing, so
+"not a url at all" became the matcher `not%20a%20url%20at%20all` and sat in the rules list
+matching nothing. Node throws on the same input, so the unit tests could not see it. Now the shape
+of the parsed hostname is checked (`looksLikeHostname`), and the same audit found the mirror-image
+problem: `scheme:` was accepted as a scheme, so `localhost:3000/app` produced the prefix
+suggestion `localhost:///3000`.
+

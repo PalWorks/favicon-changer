@@ -356,3 +356,44 @@ it would mean waking the service worker on every page load, which is a worse tra
 policy describes the counter explicitly, because a "days of use" number is exactly the thing a
 careful user would want to be told is not analytics.
 
+---
+
+## ADR-016: An unedited pattern is derived, never stored
+**Status**: Accepted · 2026-09-07 · **Load-bearing**
+
+**Decision.** The editor's scope state holds only pattern text the user typed, keyed by scope. The
+suggested pattern for an untouched field is computed from the current target on demand, by
+`patternValue()` in [utils/ruleScope.ts](../utils/ruleScope.ts). Nothing writes a suggestion into
+state, and no effect keeps one in step with anything.
+
+**Why.** Storing the suggestion is what kept breaking. It has to be regenerated whenever the
+target address changes, whenever the scope changes, when a rule is loaded, and when the popup
+hands off to the upload window, and each of those was a separate piece of code that could disagree
+with the others:
+
+- R-42: the scope button built the suggestion, so picking the scope before typing the address (the
+  normal order on the settings page) left the field empty for ever, and after one save it held the
+  previous rule's text, so a rule could be saved silently against the wrong site.
+- The fix for R-42 added a sync effect, which then corrupted "Edit that rule instead": the button
+  wrote the conflicting rule's matcher into the draft, the address field followed, and the effect
+  replaced the matcher with the suggestion derived from it. For a prefix rule that is a strictly
+  shorter pattern, so the user was dropped into editing a wider rule than the one they clicked,
+  under a new id. Reproduced in a real browser against both builds before this decision.
+- The single draft slot was rebuilt on every scope switch, so prefix to regex and back discarded
+  the user's prefix text, despite a comment promising it did not.
+
+A derived value cannot go stale, because there is nothing to keep fresh. An override cannot be
+clobbered, because the only writer is the user. Both classes of bug stop being possible rather
+than being fixed.
+
+**If reversed.** The synchronisation comes back, and with it the class of defect that has produced
+three of this project's user-visible bugs.
+
+**Also.** It removed two pieces of state (`patternDraftFor`, `patternEdited`) and one effect, and
+`isPatternOverridden()` falls out for free, which is what lets "Suggest from this page" appear only
+when it would change something instead of always.
+
+**Cost.** `patternValue()` runs `new URL()` on each render rather than on each change, up to three
+times per render through `matcherFor` and `patternErrorFor`. Measured in microseconds on a control
+that renders on keystrokes; not worth memoising, and worth much less than the correctness.
+

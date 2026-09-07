@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { findBestRule, findConflictingRule, patternMatches } from './matcher';
 import { FaviconRule } from '../types';
 
-// logger uses chrome.storage — stub it out so tests run in Node.
+// logger uses chrome.storage, so stub it out and the tests run in Node.
 vi.mock('./logger', () => ({
   logger: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

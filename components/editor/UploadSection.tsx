@@ -109,7 +109,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                     return;
                 }
             }
-            // Genuinely undecodable — surface an error instead of rendering a
+            // Genuinely undecodable, so surface an error instead of rendering a
             // broken preview the user can't act on.
             onError('Could not read that image. Try a PNG, JPEG, SVG, or WebP file.');
             setPendingImage(null);
@@ -218,7 +218,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ isOpen, onToggle, 
                                     src={processedPreview}
                                     className="w-16 h-16 border border-slate-200 rounded object-contain"
                                     // Inline CSS checkerboard (shows transparency behind the
-                                    // preview) — avoids a third-party image request.
+                                    // preview), which avoids a third-party image request.
                                     style={{
                                         backgroundImage: 'repeating-conic-gradient(#e5e7eb 0% 25%, #ffffff 0% 50%)',
                                         backgroundSize: '16px 16px',

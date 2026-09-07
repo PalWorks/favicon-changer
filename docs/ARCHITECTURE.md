@@ -244,6 +244,7 @@ utils/
   faviconObserver.ts .......... whose favicon write was it, and the debounce (ADR-014)
   matcher.ts .................. findBestRule / findConflictingRule  (pure, unit-tested)
   rating.ts ................... when to ask for a review, and the rules about how (ADR-015)
+  ruleScope.ts ................ the editor's scope/pattern machine (pure, ADR-016)
   storage.ts .................. all chrome.storage access, migration, import/export, hand-off
   messaging.ts ................ isRestrictedUrl, PING-then-inject, sendMessageToTab
   canvas.ts ................... drawOverlay, drawBadge, compression, data-URL MIME repair
