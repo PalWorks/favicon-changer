@@ -11,12 +11,15 @@ into `dist/` by Vite. The submission walkthroughs are in [../docs/PUBLISHING.md]
 | `small-promo-tile-440x280.png` | 440x280 | Chrome listing **required**, Edge optional |
 | `marquee-promo-tile-1400x560.png` | 1400x560 | Chrome marquee placement, Edge "large promotional tile", both optional |
 | `edge-store-logo-300x300.png` | 300x300 | Edge listing **required** (1:1, 300x300 recommended, 128x128 minimum). Chrome takes its icon from the package instead |
+| `screenshots/01-05*.png` | 1280x800 each | Chrome listing screenshots, five of them, and the same files suit Edge |
 
 Table name: **store-upload-assets**
 
-No screenshots exist in this repo (R-39); whether the live listing carries any from an earlier submission can only be seen in the dashboard. **Capture them at 1280x800**, which is the one size both
-stores accept: Chrome takes 1280x800 or 640x400, Edge takes 1280x800 or 640x480. Chrome allows one
-to five, Edge up to six.
+Screenshots live in [screenshots/](screenshots/), five at 1280x800, captured from the shipped build
+on 2026-09-09 and documented with the method to redo them. 1280x800 is the one size both stores
+accept: Chrome takes 1280x800 or 640x400, Edge takes 1280x800 or 640x480. Chrome allows one to
+five, Edge up to six. **The three screenshots on the live listing predate these and show the 1.3.0
+interface** (R-39); replacing them in the dashboard is a manual step.
 
 ## Requirements
 

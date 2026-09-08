@@ -22,9 +22,9 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 61 | Shipped and verified, latest 2026-09-07: the pre-release audit's 11, then R-61 and R-62, then the master audit's R-64 to R-67 |
+| Done | 62 | Shipped and verified, latest 2026-09-09: the pre-release audit's 11, then R-61 and R-62, the master audit's R-64 to R-67, and R-39's screenshots |
 | Next up | 1 | R-63 only, and it needs a decision rather than a keyboard. Everything else built is verified and packaged |
-| Paused | 4 | R-22, R-23 and R-24 deferred by decision on 2026-09-07; R-39 rescoped 2026-09-08 with the live listing's screenshots now read and known stale. Plans are written and ready to execute |
+| Paused | 3 | R-22, R-23 and R-24, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
 Table name: **roadmap-buckets**
@@ -136,9 +136,9 @@ reading it, not redoing it.
 | ID | Item | Tier | Effort | Why it is paused, and what restarts it |
 |---|---|---|---|---|
 | R-22 | Internationalisation | 5 | M | **English only for now.** 114 UI strings plus 693 emoji keywords, and the useful order (extract to `en`, then the store listing, then two or three verified languages) is a week of work whose payoff cannot be measured yet. Restart when the dashboard's install breakdown shows a language worth serving *and* someone can verify that translation |
-| R-23 | Firefox and Edge | 5 | S + M | **Chrome Web Store only for now.** The walkthrough is ready in [docs/PUBLISHING.md](docs/PUBLISHING.md), Edge needs a free account and R-39, Firefox needs a source submission and a licence choice. Restart when a second channel is worth the second listing to keep in step |
+| R-23 | Firefox and Edge | 5 | S + M | **Chrome Web Store only for now.** The walkthrough is ready in [docs/PUBLISHING.md](docs/PUBLISHING.md), Edge needs a free account (the screenshots now exist, R-39), Firefox needs a source submission and a licence choice. Restart when a second channel is worth the second listing to keep in step |
 | R-24 | Cross-device sync | 5 | L | **Deferred, revisit later.** The design (sync reproducible metadata, never rendered icons) and the trade (opt-in, off by default, policy changed in the same release) are both settled; the work is not started. Export and import already move rules between devices manually |
-| R-39 | Store screenshots | 3 | S | **Now scoped, 2026-09-08.** The live listing has three, all 1280x800, all showing the 1.3.0 interface with only two scope buttons. None are in the repo. Costs installs, blocks no release. Capture five fresh at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser, so they are scriptable |
+| R-39 | Store screenshots | 3 | S | **Built 2026-09-09.** Five 1280x800 captures of the shipped build are in [store-assets/screenshots/](store-assets/screenshots/), with the method recorded. Uploading them, and retiring the three 1.3.0-era images on the listing, is a dashboard step |
 
 Table name: **roadmap-paused**
 
@@ -780,7 +780,7 @@ left filling their canvases: the padding guidance is for the 128 used by the sto
 `chrome://extensions`, while those two are the toolbar and management icons, which should not
 shrink.
 
-### R-39 · The listing's screenshots show a version we no longer ship · **S** · **paused** · *rescoped 2026-09-08*
+### R-39 · Store screenshots · **S** · ✅ done 2026-09-09
 This was previously written as an unknown: whether the live item carried any screenshots was
 thought to be readable only in the dashboard. That was wrong. The public listing page labels each
 one in `alt` text (`Item media N (screenshot)`), so it can be read remotely, and it was on
@@ -798,13 +798,19 @@ What they show, and why they are now misleading rather than merely old:
   rules list shows real addresses with only partial blurring. Nothing secret, but it is the
   author's own browsing on a public page, which is a reason to reshoot rather than retouch.
 
-The requirement is at least one at 1280x800 or 640x400, up to five, so there are two unused slots.
-Capture in a **clean browser profile** with tabs chosen for the shot. Good candidates: the
-four-way scope selector with a prefix pattern and its live tab match, the emoji picker, the badge
-editor, the rules list, and the save confirmation banner from R-61, which is the newest visible
-thing the product does. These have to be real captures, so they cannot be generated from the
-design masters, but the extension can be driven over the DevTools protocol, so they are scriptable
-rather than hand-taken.
+**What shipped.** Five captures at 1280x800, 24-bit PNG without alpha, in
+[store-assets/screenshots/](store-assets/screenshots/): the tab strip with custom icons and a
+labelled magnifier, the four-way scope selector with its live open-tab count, the emoji picker, a
+badge over GitHub's real favicon, and the rule manager. Every pixel of interface is a capture of
+the shipped build, driven over the DevTools protocol in a throwaway Chrome on an `Xvfb` display
+with a fresh profile, so none of the author's own tabs, profile or browsing can appear, which was
+the flaw in the images being replaced. The editor was pointed at each target through the same
+`pendingEditorTarget` key the toolbar click uses, so each shot is a real editor session.
+[store-assets/screenshots/README.md](store-assets/screenshots/README.md) records the method, the
+three things that were staged, and the rule that a caption must describe what the picture shows.
+
+**Left to do by hand:** upload them and delete the three 1.3.0-era images. Only the dashboard can
+do that.
 
 ### R-40 · Dependabot · **S** · ✅ done 2026-09-06
 The audit gate added by R-16 is local and only runs on push, so a new advisory was invisible until
@@ -1081,8 +1087,9 @@ distribution channel.
 **Step by step for both stores, with the listing copy drafted and every requirement read off the
 vendor's own docs on 2026-09-07: [docs/PUBLISHING.md](docs/PUBLISHING.md).** Registration for the
 Edge program is free, an individual account verifies in hours where a company account can take
-weeks, and certification runs up to seven business days. The only thing blocking an Edge
-submission today is R-39.
+weeks, and certification runs up to seven business days. Nothing technical blocks an Edge
+submission now that the screenshots exist (R-39); what it costs is a second listing to keep in
+step, which is why it stays paused.
 
 **Firefox 154, verified.** The built `dist/` was installed as a temporary add-on over WebDriver
 BiDi and exercised end to end.

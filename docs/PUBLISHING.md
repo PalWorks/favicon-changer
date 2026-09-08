@@ -73,7 +73,9 @@ reject a re-upload of a version it already has, so bump before resubmitting.
 > which was verified with `git diff b26a8b9 HEAD -- . ':(exclude)*.md'` before tagging.
 
 The listing carries three screenshots, read off the public page on 2026-09-08, and all three show
-the 1.3.0 interface. Refreshing them is R-39; it blocks nothing.
+the 1.3.0 interface. Five replacements at 1280x800 are ready in
+[../store-assets/screenshots/](../store-assets/screenshots/) with the upload order in
+[STORE_LISTING.md](STORE_LISTING.md) §1; swapping them is a dashboard step and blocks nothing.
 Every field's copy, measured against the store's limits, is in [STORE_LISTING.md](STORE_LISTING.md).
 
 ---

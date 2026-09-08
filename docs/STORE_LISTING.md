@@ -26,7 +26,7 @@ Submission steps live in [PUBLISHING.md](PUBLISHING.md) §1; this file is only t
 | Version | **1.4.4**, last updated **8 September 2026** |
 | Package size the store reports | 165KiB |
 | Users / rating | 1,000 users, 4.5 from 8 ratings |
-| Screenshots | **3, all 1280x800**, and they show the 1.3.0 interface. See ROADMAP R-39 |
+| Screenshots | **3, all 1280x800**, and they show the 1.3.0 interface. Five replacements are ready in [../store-assets/screenshots/](../store-assets/screenshots/) |
 | Language | English (United States) |
 | Privacy policy | `https://github.com/PalWorks/favicon-changer/blob/main/PRIVACY_POLICY.md` |
 | Developer | Palaniappan Meyyappan (palworks.ai), trader status declared |
@@ -142,20 +142,32 @@ string is English (ADR-018, R-22 paused), so any other language claim would be f
 | Asset | Requirement, quoted from Chrome's docs | What to use |
 |---|---|---|
 | Store icon | "128x128 px" | Taken from the uploaded package: `icons/128.png`, verified genuinely 128x128 (R-12) |
-| Screenshots | "At least one 1280x800 px screenshot, up to 5 total" | **Not in the repo.** See the note below |
+| Screenshots | "At least one 1280x800 px screenshot, up to 5 total" | Five, in [../store-assets/screenshots/](../store-assets/screenshots/), 24-bit PNG with no alpha. Upload all five |
 | Small promo tile | "440x280 px" | `store-assets/small-promo-tile-440x280.png` |
 | Marquee promo tile | Optional, "1400x560 px" | `store-assets/marquee-promo-tile-1400x560.png` |
 | YouTube video | Optional | None. Leave empty |
 
 Table name: **listing-assets**
 
-**Screenshots are the one field this document cannot settle for you.** The repo contains none
-(R-39, paused), and the public listing page is a JavaScript application whose markup does not
-reveal whether the images on it are real screenshots or placeholders, so it cannot be read
-remotely. Open the dashboard and look: if the item already has screenshots from an earlier
-version, leaving them costs nothing for this upload, and they simply show an older UI. If it has
-none, one is required, and R-39 in [../ROADMAP.md](../ROADMAP.md) lists the four captures worth
-taking at 1280x800.
+**Screenshots, and what to do with the three already on the listing.** The item carries three,
+read off the public page on 2026-09-08, and all three show the 1.3.0 interface: two scope buttons
+where the product now has four, emoji glyphs 1.4.4 replaced, and one caption promising regular
+expression rules over an interface that has none. Replace all three. Upload these five in order:
+
+| # | File | What it shows |
+|---|---|---|
+| 1 | `01-tab-icons.png` | A real window of tabs carrying custom icons, with the tab strip magnified and labelled |
+| 2 | `02-match-scopes.png` | The four-way scope selector with the live open-tab match count |
+| 3 | `03-emoji-library.png` | The emoji picker |
+| 4 | `04-badges.png` | A badge composited over a site's real favicon |
+| 5 | `05-rule-manager.png` | The settings page: rule list, exclusions, storage, import and export |
+
+Table name: **listing-screenshots**
+
+How they were captured, and how to redo them, is in
+[../store-assets/screenshots/README.md](../store-assets/screenshots/README.md). The dashboard
+replaces screenshots one at a time; delete the three old ones after the new ones are in, so the
+listing is never left with none.
 
 ### URLs
 
