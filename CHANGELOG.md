@@ -10,6 +10,21 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [Unreleased]
 
+Merged and verified, waiting for a user-visible change to ship alongside. The store still serves
+1.4.4 built with the previous dependency set.
+
+### Changed
+- Dependency updates from the two grouped Dependabot pull requests: react and react-dom 19.2.3 to
+  19.2.8, `@types/react-dom` to 19.2.7, tailwindcss and `@tailwindcss/postcss` 4.1.18 to 4.3.3,
+  autoprefixer to 10.5.4, postcss to 8.5.28, `@types/chrome` 0.1.36 to 0.2.8. No product code
+  changed. Type check clean, 392 tests pass, `content.js` builds byte-identical, and the
+  stylesheet grows 253 bytes.
+- Tailwind 4.3.3 changes its default `--font-sans` token, and both extension pages use
+  `font-sans`, so it was checked rather than assumed: the published 4.1.18 build and the rebuilt
+  4.3.3 build were loaded side by side in one browser and both paint **Noto Sans** with an
+  identical heading width. An unlayered `body` font rule outranks the utility, so the token never
+  reaches the page. Nothing about the interface changes for a user.
+
 ---
 
 ## [1.4.4]: 2026-09-07

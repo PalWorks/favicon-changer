@@ -44,6 +44,19 @@ automated gate. That means two things worth remembering: if you clone fresh and 
 
 To install by hand: `git config core.hooksPath .githooks`.
 
+### Dependency updates
+
+Dependabot opens at most one production and one development pull request a week, and nothing
+merges itself. Two things to expect when you merge them:
+
+- **Merge them one at a time.** Both edit `package-lock.json`, so the second conflicts the moment
+  the first lands. Comment `@dependabot rebase` on the second and it force-pushes a clean branch
+  within a minute or two.
+- **`npm install` afterwards may show a dirty lockfile with `libc` fields removed.** That is the
+  local npm (10.9.8) disagreeing with the newer npm Dependabot runs, over metadata that only
+  affects optional platform packages on musl. Keep the lockfile from the merge (`git checkout --
+  package-lock.json`) rather than committing the churn back and forth.
+
 ### Checking that Actions usage is still nil
 
 The Actions tab is not empty even with no workflow file, because GitHub lists its own Dependabot
