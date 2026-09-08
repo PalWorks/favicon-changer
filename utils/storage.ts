@@ -377,6 +377,12 @@ export const requestApplyReport = async (
 export interface RuleTargetTab {
   id: number;
   hostname: string;
+  /**
+   * Whether the page is https. One bit rather than the address, because that is
+   * all the caller needs: an http icon address is never fetched on a secure
+   * page (R-63), so a save that looks confirmed changes nothing there.
+   */
+  secure: boolean;
 }
 
 /**
@@ -416,7 +422,7 @@ export const findTabForRule = async (matchType: MatchType, matcher: string): Pro
       });
 
       const picked = pickTargetTab(candidates, matchType, matcher);
-      resolve(picked ? { id: picked.id, hostname: picked.hostname } : null);
+      resolve(picked ? { id: picked.id, hostname: picked.hostname, secure: picked.url.startsWith('https://') } : null);
     });
   });
 };

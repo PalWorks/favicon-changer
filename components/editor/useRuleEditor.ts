@@ -23,6 +23,7 @@ import { findConflictingRule, patternMatches } from '../../utils/matcher';
 import { popupClosesOnFileDialog } from '../../utils/platform';
 import { LATE_APPLY_REPORT_TIMEOUT_MS } from '../../constants';
 import { hostnameFromInput } from '../../utils/patterns';
+import { isInsecureIconUrl } from '../../utils/validation';
 import { describeImport } from '../../utils/importRules';
 import {
     INITIAL_SCOPE_STATE,
@@ -311,6 +312,8 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
             findTabForRule(rule.matchType, rule.matcher),
         ]);
 
+        const insecureIcon = isInsecureIconUrl(rule.faviconUrl);
+
         if (!tab) {
             return {
                 savedRuleId: rule.id,
@@ -318,6 +321,7 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
                 checkedTab: false,
                 report: null,
                 iconLoaded,
+                insecureIcon,
             };
         }
 
@@ -328,6 +332,8 @@ export const useRuleEditor = ({ mode, context, initialRule, onRuleSaved }: UseRu
             tabId: tab.id,
             report: await requestApplyReport(tab.id),
             iconLoaded,
+            insecureIcon,
+            checkedTabSecure: tab.secure,
         };
     };
 

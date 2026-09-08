@@ -22,8 +22,8 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 
 | Bucket | Count | Where it stands |
 |---|---|---|
-| Done | 62 | Shipped and verified, latest 2026-09-09: the pre-release audit's 11, then R-61 and R-62, the master audit's R-64 to R-67, and R-39's screenshots |
-| Next up | 1 | R-63 only, and it needs a decision rather than a keyboard. Everything else built is verified and packaged |
+| Done | 63 | Shipped and verified, latest 2026-09-09: the pre-release audit's 11, then R-61 and R-62, the master audit's R-64 to R-67, R-39's screenshots and R-63's http icon message |
+| Next up | 0 | The queue is empty. What is built is verified, 1.4.4 is live, and the only unreleased change is R-63's save-time message |
 | Paused | 3 | R-22, R-23 and R-24, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
@@ -108,7 +108,7 @@ Table name: **roadmap-done**
 
 | ID | Item | Effort | State |
 |---|---|---|---|
-| R-63 | Say something useful about an `http:` icon address | S | Raised 2026-09-07 by R-61. Needs a decision, not a keyboard: see the detail below and [L-37](docs/LIMITATIONS.md) |
+| R-63 | Say something useful about an `http:` icon address | S | ✅ done 2026-09-09. Option (b) built after measuring Chrome's actual behaviour: a distinct save-time warning when the page is https, a note otherwise |
 
 Table name: **roadmap-next**
 
@@ -1255,8 +1255,8 @@ harness's, and are now in **testing-harness-traps**; the fourth was real and is 
 editor page, and an extension page cannot load an insecure subresource under MV3, so probing an
 `http:` address returned "broken" for a working image. It would have shipped a confident warning
 about a working address, which is the exact failure this item exists to remove. `http:` is now not
-probed at all and gets no claim either way. Recorded as [L-37](docs/LIMITATIONS.md), with R-63 for
-what could be said instead.
+probed at all and gets no claim either way. Recorded as [L-37](docs/LIMITATIONS.md); what could be
+said instead became R-63, now done.
 
 ### R-62 · A long matcher filled the whole popup · **S** · ✅ done 2026-09-07
 Reported from a live Facebook auth page with two screenshots. The conflict warning quoted the
@@ -1275,18 +1275,38 @@ Two smaller things went with it, since the markup was open: the warning triangle
 inline SVG (as the support section already did), and the sentence was reworded to stop putting an
 article in front of a scope name, which rendered as "a Entire Domain rule".
 
-### R-63 · Say something useful about an `http:` icon address · **S** · needs a decision
-Raised by R-61 and described as [L-37](docs/LIMITATIONS.md). Two facts are true of a rule whose
-icon is a plain `http:` URL, and the product currently says neither: it cannot be probed from an
-extension page (so no warning is possible), and on an `https:` page it is mixed content, which
-Chrome upgrades and then blocks when the upgrade fails.
+### R-63 · Say something useful about an `http:` icon address · **S** · ✅ done 2026-09-09
+Raised by R-61 and described as [L-37](docs/LIMITATIONS.md). Option (b) was chosen: a distinct
+message at save time rather than a probe result. Option (c), refusing `http:` outright, stays
+rejected because it would break existing rules and existing exports for a case that genuinely
+works on an intranet.
 
-**Options.** (a) Leave it: an `http:` icon works on `http:` pages, and the case is narrow, an
-intranet or a local dev server. (b) A distinct message at save time, not a probe result: "that
-address is http, so it may not load on secure pages", which needs its own verification of Chrome's
-mixed-content handling before it can be stated as fact. (c) Refuse `http:` in
-`isAllowedFaviconUrl`, which would break existing rules and existing imports and is out of
-proportion. **Recommendation: (b), or (a) if nobody reports it.** Not (c).
+**The fact this waited on, now measured** in Chrome 152 on 2026-09-09 against a server that speaks
+only http, watching the server's own log rather than trusting the documentation:
+
+- On an **http** page the icon is fetched (`GET /icon-v2.png 200`) and the tab strip repaints with
+  that address as its favicon.
+- On an **https** page **no request reaches the server at all**. Chrome logs "Mixed Content: ...
+  This request was automatically upgraded to HTTPS" and the upgraded request fails, so the tab
+  silently keeps its old icon. The content script has still written the `href` and still reports
+  `applied` with `painted: true`, because from the page's side nothing failed.
+
+**What shipped.** `describeSaveOutcome` gained an `insecure-icon` outcome for the one combination
+that is definitely wrong, an http address saved for a page that was checked and is https:
+
+> Rule saved, but that image address starts with http and example.com is a secure page, so the
+> browser will not load it. Use an https address, or upload the image.
+
+Anything more actionable still wins: excluded, shadowed, unmatched, fallback, not-painted and a
+failed probe all keep their own message, because a scheme note on top of those would bury the real
+problem. Where the outcome is otherwise fine, the confirmation and the no-tab-open message carry
+one appended sentence instead of a warning, since on an http page the address does work.
+
+`isInsecureIconUrl` parses the scheme rather than searching the string, so `https://x/http://y`
+is not mistaken for insecure. `findTabForRule` now returns one extra bit, `secure`, rather than the
+tab's address, because that is all the caller needs. Eight new unit tests, and the message was
+confirmed end to end in a real browser against a live https page with an http icon, alongside an
+https control that still reads "Favicon updated successfully!".
 
 ### R-64 · An exact-URL rule could be saved as text no page can produce · **S** · ✅ done 2026-09-07
 Found by reading `matcherFor` against what `exact_url` actually compares. The matcher goes into a

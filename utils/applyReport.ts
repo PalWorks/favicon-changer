@@ -163,7 +163,9 @@ export type SaveOutcomeKind =
     /** The rule applied but the page could not be written to. */
     | 'not-painted'
     /** The icon address itself does not load. */
-    | 'icon-failed';
+    | 'icon-failed'
+    /** The icon address is http and the page it was saved for is https. */
+    | 'insecure-icon';
 
 export interface SaveOutcome {
     kind: SaveOutcomeKind;
@@ -186,6 +188,13 @@ export interface SaveVerification {
     report: ApplyReport | null;
     /** Whether a remote icon address resolved. Undefined when not checked. */
     iconLoaded?: boolean;
+    /**
+     * Whether the rule's icon address is plain http. It cannot be probed from an
+     * an extension page (L-37), so this is the scheme, not a load result.
+     */
+    insecureIcon?: boolean;
+    /** Whether the tab that was checked is itself an https page. */
+    checkedTabSecure?: boolean;
 }
 
 /**
@@ -202,6 +211,14 @@ export interface SaveVerification {
  * used to promise a visible change and they should be told they will not see
  * one yet.
  */
+/**
+ * Added to an otherwise fine outcome when the icon address is http. Not a
+ * warning on its own: on an http page such an address works, and the user may
+ * only ever open http pages. It is here so that "it worked" does not read as
+ * "it will work everywhere".
+ */
+const INSECURE_NOTE = ' Note that this address starts with http, so secure pages will not load it.';
+
 export const describeSaveOutcome = (v: SaveVerification): SaveOutcome => {
     const where = v.targetLabel || 'that page';
 
@@ -218,7 +235,8 @@ export const describeSaveOutcome = (v: SaveVerification): SaveOutcome => {
         return {
             kind: 'not-open',
             tone: 'warning',
-            text: 'Rule saved. It will apply the next time you open a matching page.',
+            text: 'Rule saved. It will apply the next time you open a matching page.'
+                + (v.insecureIcon ? INSECURE_NOTE : ''),
         };
     }
 
@@ -281,6 +299,22 @@ export const describeSaveOutcome = (v: SaveVerification): SaveOutcome => {
                     text: `Rule saved, but ${where} could not be written to. Reload it to see the new icon.`,
                 };
             }
-            return { kind: 'confirmed', tone: 'success', text: 'Favicon updated successfully!' };
+            // The page did write the link, and reports as much, but on an https
+            // page an http address is upgraded and never fetched, so the icon
+            // the user is looking at will not change. Saying "updated
+            // successfully" here is exactly the lie R-61 exists to prevent.
+            if (v.insecureIcon && v.checkedTabSecure) {
+                return {
+                    kind: 'insecure-icon',
+                    tone: 'warning',
+                    text: `Rule saved, but that image address starts with http and ${where} is a secure `
+                        + 'page, so the browser will not load it. Use an https address, or upload the image.',
+                };
+            }
+            return {
+                kind: 'confirmed',
+                tone: 'success',
+                text: 'Favicon updated successfully!' + (v.insecureIcon ? INSECURE_NOTE : ''),
+            };
     }
 };

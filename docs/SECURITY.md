@@ -38,8 +38,10 @@ script-src 'self'; object-src 'self'; img-src 'self' data: blob: https:;
   while an `https:` one of the same size loads. So a rule whose icon is a plain `http:` address
   saves and applies on pages (the content script is governed by the *page's* CSP, not ours), but
   cannot be **previewed** anywhere in our own UI, and cannot be checked at save time either. The
-  preview falls back to a globe and the save makes no claim about the address. Documented for
-  users as [L-37](LIMITATIONS.md), with the option of saying something about it as R-63. Widening
+  preview falls back to a globe and the save makes no claim about whether the address resolves. It
+  does now say what the scheme means, though: since R-63 a save for an `https:` page warns that an
+  `http:` address will not be fetched there, which was measured rather than assumed. Documented
+  for users as [L-37](LIMITATIONS.md). Widening
   `img-src` to `http:` to make previews work would let any rule pull an image over plaintext into
   an extension page, which is not a trade worth making for a preview.
 - **Never add** `'unsafe-inline'` or `'unsafe-eval'`, and never widen `script-src`. Both are

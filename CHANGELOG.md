@@ -13,6 +13,14 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 Merged and verified, waiting for a user-visible change to ship alongside. The store still serves
 1.4.4 built with the previous dependency set.
 
+### Added
+- **A save now says when an icon address cannot work on the page you saved it for.** An address
+  starting with `http` is never fetched by Chrome on a secure page: it upgrades the request to
+  https and the upgrade fails, so the tab keeps its old icon while the page itself reports success.
+  Saving such an address for an https page now says so and suggests an https address or an upload,
+  instead of claiming the favicon was updated. On an `http:` page, where the address does work, the
+  confirmation carries a short note rather than a warning (R-63).
+
 ### Changed
 - Dependency updates from the two grouped Dependabot pull requests: react and react-dom 19.2.3 to
   19.2.8, `@types/react-dom` to 19.2.7, tailwindcss and `@tailwindcss/postcss` 4.1.18 to 4.3.3,

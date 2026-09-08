@@ -186,7 +186,8 @@ Found while running the 2026-09-07 audit. Every one of these looked like a produ
 | **The badge section has two modes** | It opens in Color Overlay, where there is no badge-text field at all | Click "Notification Badge" first, then the `maxLength=3` input |
 | **A confirmation clears itself** | The success status is a 2s flash (warnings persist). Sleeping past the save and then reading the banner finds nothing, which reads as "no message was shown" | Poll for the banner on a short interval, and when a message is *already* up, poll until the text **changes** rather than until it is non-empty |
 | **Two banners share `role="status"`** | The conflict warning and the save outcome are both `role="status"`, so a harness that joins them reads the conflict banner (which is up before the save) and never waits for the outcome | Filter the conflict banner out by its heading, or address the save outcome specifically |
-| **An extension page cannot load `http:`** | Under MV3 an insecure subresource is refused, so an `<img>` probe of any `http:` address errors whatever is there. Measured: `http://127.0.0.1:8899/blue.png` errors while an `https:` image loads | Probe `https:` only, in an extension page. This one was a product defect first, found only by running it (L-37) |
+| **An extension page cannot load `http:`** | Our own `img-src 'self' data: blob: https:` has no `http:`, so an `<img>` probe of any `http:` address errors whatever is there. Measured: `http://127.0.0.1:8899/blue.png` errors while an `https:` image loads. Not an MV3 rule, our manifest | Probe `https:` only, in an extension page. This one was a product defect first, found only by running it (L-37) |
+| **Chrome negative-caches a failed favicon** | A second run against the same icon address makes no request at all, so a fixed server or a fixed rule still looks broken | Use a fresh address per run, or a fresh profile. Found while measuring R-63 |
 | **Chrome will not discard the active tab** | `chrome.tabs.discard` throws "Cannot discard tab with id", and discarding also **changes the tab's id** | Activate a sibling in the same window, wait for `active` to settle, then discard; re-query by URL afterwards rather than reusing the id |
 | **A synchronous storage stub hides the worst bug class** | `chrome.storage` has no transactions, so an unserialised read-modify-write loses a change. With an instant stub the two operations never overlap and the test passes on broken code | Defer the stub's `get` and `set` by a turn (`storage.test.ts`), then assert on `Promise.all` of two mutations. This is what R-65's regression test rests on |
 | **`getStorageData` does not await its own latch write** | The migration latch is written fire-and-forget, on purpose, so the first read is not held up. A test asserting on what was *persisted* right after it reads nothing | Await a turn before asserting on `store.migrated`. Anything asserting on the returned value needs no wait |
@@ -238,6 +239,8 @@ described above; 9 to 13 cannot.
    excluded", and pressing that must re-check and then confirm; with a more specific rule
    already winning, it must say the icon did not change; with no matching tab open, it must say
    the rule is waiting. A dead `https:` image address must be reported, a working one must not.
+   An `http:` address saved for an **https** page must warn that the browser will not load it
+   there, and the same address saved for an **http** page must still confirm, with a note (R-63).
    All driveable over the DevTools protocol.
 9. **Upload on Linux**, the "Open" button must produce a standalone window whose file picker
    survives; the file must apply to the tab the popup was opened from. ADR-007.

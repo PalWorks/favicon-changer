@@ -3,6 +3,7 @@ import {
   isValidRegex,
   isValidBadgeText,
   isAllowedFaviconUrl,
+  isInsecureIconUrl,
   approximateUrlBytes,
   MAX_ICON_BYTES,
 } from './validation';
@@ -93,5 +94,29 @@ describe('approximateUrlBytes', () => {
     const wellOver = 'data:image/png;base64,' + 'A'.repeat(Math.ceil(MAX_ICON_BYTES / 0.75) + 100);
     expect(approximateUrlBytes(justUnder)).toBeLessThanOrEqual(MAX_ICON_BYTES);
     expect(approximateUrlBytes(wellOver)).toBeGreaterThan(MAX_ICON_BYTES);
+  });
+});
+
+describe('isInsecureIconUrl', () => {
+  it('is true only for a plain http address', () => {
+    expect(isInsecureIconUrl('http://127.0.0.1:8899/icon.png')).toBe(true);
+    expect(isInsecureIconUrl('HTTP://intranet.local/icon.png')).toBe(true);
+  });
+
+  it('is false for everything the editor normally produces', () => {
+    expect(isInsecureIconUrl('https://cdn.example.com/i.png')).toBe(false);
+    expect(isInsecureIconUrl('data:image/png;base64,AAAA')).toBe(false);
+    expect(isInsecureIconUrl('')).toBe(false);
+    expect(isInsecureIconUrl('not a url')).toBe(false);
+    // The scheme is parsed, not searched for: "http" inside the path or the
+    // query must not make a secure address look insecure.
+    expect(isInsecureIconUrl('https://example.com/http://x.png')).toBe(false);
+    expect(isInsecureIconUrl('https://example.com/i.png?from=http://x')).toBe(false);
+  });
+
+  it('does not throw on the shapes an import can contain', () => {
+    [null, undefined, 42, {}, []].forEach(value => {
+      expect(isInsecureIconUrl(value as unknown as string)).toBe(false);
+    });
   });
 });

@@ -306,9 +306,9 @@ message that costs one needless reload beats a confirmation that was never recei
 only tabs open at the moment of an update, and only until they are reloaded, which is the same
 window as [L-34](#l-34--background-tabs-keep-their-old-icon-across-an-extension-update--open-inherent).
 
-### L-37 · An `http:` icon address is never checked, cannot be previewed, and will not load on a secure page · *open*
-Three facts about a rule whose icon is a plain `http:` URL, none of which the product says out
-loud yet:
+### L-37 · An `http:` icon address cannot be checked or previewed, and will not load on a secure page · *partly addressed 2026-09-09*
+Three facts about a rule whose icon is a plain `http:` URL. **The third is now said out loud at
+save time** (R-63); the first two remain true and silent:
 
 1. **It is not probed, and cannot be.** The cause is our own declared policy, not a browser
    quirk: `public/manifest.json` sets `img-src 'self' data: blob: https:` for extension pages,
@@ -321,16 +321,27 @@ loud yet:
    editor fall back to a globe outline for such a rule, with no explanation. The icon still works
    on an `http:` page, because the content script writes into the page and is governed by the
    page's CSP rather than ours.
-3. **On an `https:` page it is mixed content.** Chrome upgrades an optionally-blockable
-   mixed-content image to https and blocks it when the upgrade fails, so an `http:` icon works on
-   an `http:` page and usually does not on a secure one. `isAllowedFaviconUrl` accepts both
-   schemes and PRIVACY_POLICY.md's case 1 describes both, so this is allowed and undocumented in
-   the UI rather than prevented.
+3. **On an `https:` page it is never fetched at all.** Measured in Chrome 152 on 2026-09-09,
+   both halves, against a local server that speaks only http:
+   - On an `http:` page the icon is fetched (`GET /icon-v2.png 200` in the server's own log) and
+     the tab strip repaints, reporting that address as its favicon.
+   - On an `https:` page **no request ever reaches the server**. Chrome logs "Mixed Content: the
+     page at 'https://example.com/' was loaded over HTTPS, but requested an insecure element ...
+     This request was automatically upgraded to HTTPS", and the upgraded request fails because
+     nothing is listening for https. The tab keeps its old icon.
 
-The fix, if it is worth one, is a distinct message at save time for an `http:` address rather than
-a probe result: "that address is http, so it may not load on secure pages." Not built, because
-saying it accurately needs its own verification and the case is narrow (an intranet or a local dev
-server). Raised as ROADMAP R-63.
+   The content script still writes the `href`, and reports `applied` with `painted: true`, because
+   from the page's side nothing failed. So the save used to read "Favicon updated successfully!"
+   while nothing visible changed, which is exactly what ADR-019 exists to prevent.
+   `describeSaveOutcome` now returns `insecure-icon` for that combination instead, and appends a
+   one-sentence note to the confirmed and not-open messages so an http address is never reported
+   as working everywhere. `isAllowedFaviconUrl` still accepts both schemes on purpose: an http
+   icon is genuinely useful on an intranet, and refusing it would break existing rules and
+   existing exports.
+
+**A debugging trap found while measuring this.** Chrome negative-caches a failed favicon fetch, so
+retrying the same address in the same profile makes no request at all and looks like a different
+failure. Change the address, or use a fresh profile, before concluding anything from a second run.
 
 ### L-38 · Two extension surfaces writing in the same instant can still lose one change · *open, inherent*
 `chrome.storage` has no transactions, so every mutation is a read-modify-write of a whole map.

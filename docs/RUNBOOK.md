@@ -75,7 +75,8 @@ of what it can say:
 | ...another rule wins on... | A different rule owns that page. The rules list in settings shows which. |
 | ...did not confirm the change | We got no answer from the page. Usually a tab open since before an update (reload it), a busy page (the message corrects itself if the page frees up), or a page we may not script. |
 | ...will apply the next time you open a matching page | No matching tab was open, so nothing could be checked. Not an error. |
-| ...that image address did not load | A pasted `https:` image address that does not resolve. An `http:` address is never checked at all and cannot be previewed either, see L-37. |
+| ...that image address did not load | A pasted `https:` image address that does not resolve. An `http:` address is never probed at all and cannot be previewed either, see L-37. |
+| ...starts with http and ... is a secure page | The rule's icon address is plain `http:` and it was saved for an `https:` page. Chrome upgrades the request and never fetches it, so nothing changes there. An https address, or an upload, fixes it. The same address does work on an `http:` page, and then the confirmation carries a note rather than a warning (R-63). |
 | ...reports that no rule matches it / showing your fallback icon | The rule was saved but does not cover the page it was made for. Check the pattern. |
 
 Table name: **runbook-save-messages**

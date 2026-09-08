@@ -72,6 +72,30 @@ export const isAllowedFaviconUrl = (url: string): boolean => {
     }
 };
 
+/**
+ * Whether an icon address is plain `http:`, which is worth telling the user
+ * about at save time (R-63). Both halves of this were measured in Chrome 152 on
+ * 2026-09-09 rather than taken from documentation:
+ *
+ * - On an **http** page the icon loads and the tab repaints normally.
+ * - On an **https** page the request never leaves the browser. Chrome upgrades
+ *   the insecure subresource to https and logs "Mixed Content: ... This request
+ *   was automatically upgraded to HTTPS", so a server that speaks only http is
+ *   never reached and the tab silently keeps its old icon.
+ *
+ * It stays allowed by isAllowedFaviconUrl: an http icon is genuinely useful on
+ * an intranet or a dev server, and refusing it would break existing rules and
+ * existing exports. This is only for saying so.
+ */
+export const isInsecureIconUrl = (url: string): boolean => {
+    if (typeof url !== 'string' || !url) return false;
+    try {
+        return new URL(url).protocol === 'http:';
+    } catch (e) {
+        return false;
+    }
+};
+
 /** Approximate decoded size of a data URL, or the string length otherwise. */
 export const approximateUrlBytes = (url: string): number => {
     const base64 = url.indexOf(';base64,');

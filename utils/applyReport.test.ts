@@ -303,3 +303,60 @@ describe('describeSaveOutcome', () => {
         expect(outcome.text).not.toContain('undefined');
     });
 });
+
+// --- An http icon address (R-63) --------------------------------------------
+//
+// Measured in Chrome 152: on an https page the request is upgraded and never
+// reaches an http server, so the page reports "applied" and the icon the user
+// is looking at does not change. On an http page the same address works.
+
+describe('describeSaveOutcome with an http icon address', () => {
+    it('does not confirm a save whose icon can never load on the page it was checked against', () => {
+        const outcome = describeSaveOutcome(verification({ insecureIcon: true, checkedTabSecure: true }));
+        expect(outcome.kind).toBe('insecure-icon');
+        expect(outcome.tone).toBe('warning');
+        expect(outcome.text).toContain('example.com');
+    });
+
+    it('still confirms on an http page, where the address does work, and says where it will not', () => {
+        const outcome = describeSaveOutcome(verification({ insecureIcon: true, checkedTabSecure: false }));
+        expect(outcome.kind).toBe('confirmed');
+        expect(outcome.tone).toBe('success');
+        expect(outcome.text).toContain('secure pages will not load it');
+    });
+
+    it('adds the same note when no tab was open to check', () => {
+        const outcome = describeSaveOutcome(verification({ checkedTab: false, report: null, insecureIcon: true }));
+        expect(outcome.kind).toBe('not-open');
+        expect(outcome.text).toContain('secure pages will not load it');
+    });
+
+    it('says nothing about schemes for an ordinary icon', () => {
+        [
+            verification(),
+            verification({ checkedTab: false, report: null }),
+            verification({ insecureIcon: false, checkedTabSecure: true }),
+        ].forEach(v => {
+            expect(describeSaveOutcome(v).text).not.toContain('http');
+        });
+    });
+
+    it('yields to the outcomes that are more actionable than a scheme', () => {
+        // Each of these tells the user something that matters more: the rule is
+        // not the one applying, or it will never apply at all. Mentioning the
+        // scheme on top of that would bury the actual problem.
+        const cases: [Partial<SaveVerification>, string][] = [
+            [{ report: { status: 'excluded' } }, 'excluded'],
+            [{ report: { status: 'applied', ruleId: 'other' } }, 'shadowed'],
+            [{ report: { status: 'none' } }, 'unmatched'],
+            [{ report: { status: 'fallback' } }, 'fallback'],
+            [{ iconLoaded: false }, 'icon-failed'],
+            [{ report: { status: 'applied', ruleId: 'r1', painted: false } }, 'not-painted'],
+        ];
+        cases.forEach(([over, kind]) => {
+            const outcome = describeSaveOutcome(verification({ insecureIcon: true, checkedTabSecure: true, ...over }));
+            expect(outcome.kind).toBe(kind);
+            expect(outcome.text).not.toContain('secure pages will not load it');
+        });
+    });
+});
