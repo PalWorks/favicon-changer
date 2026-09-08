@@ -24,7 +24,7 @@ Legend: **done** shipped and verified · **next** the current work queue, in ord
 |---|---|---|
 | Done | 61 | Shipped and verified, latest 2026-09-07: the pre-release audit's 11, then R-61 and R-62, then the master audit's R-64 to R-67 |
 | Next up | 1 | R-63 only, and it needs a decision rather than a keyboard. Everything else built is verified and packaged |
-| Paused | 4 | R-22, R-23, R-24 and R-39, each deferred by decision on 2026-09-07. Plans are written and ready to execute |
+| Paused | 4 | R-22, R-23 and R-24 deferred by decision on 2026-09-07; R-39 rescoped 2026-09-08 with the live listing's screenshots now read and known stale. Plans are written and ready to execute |
 | Standing | 6 | Decided, revisit only if the reasoning changes |
 
 Table name: **roadmap-buckets**
@@ -138,7 +138,7 @@ reading it, not redoing it.
 | R-22 | Internationalisation | 5 | M | **English only for now.** 114 UI strings plus 693 emoji keywords, and the useful order (extract to `en`, then the store listing, then two or three verified languages) is a week of work whose payoff cannot be measured yet. Restart when the dashboard's install breakdown shows a language worth serving *and* someone can verify that translation |
 | R-23 | Firefox and Edge | 5 | S + M | **Chrome Web Store only for now.** The walkthrough is ready in [docs/PUBLISHING.md](docs/PUBLISHING.md), Edge needs a free account and R-39, Firefox needs a source submission and a licence choice. Restart when a second channel is worth the second listing to keep in step |
 | R-24 | Cross-device sync | 5 | L | **Deferred, revisit later.** The design (sync reproducible metadata, never rendered icons) and the trade (opt-in, off by default, policy changed in the same release) are both settled; the work is not started. Export and import already move rules between devices manually |
-| R-39 | Store screenshots | 3 | S | **Deferred 2026-09-07 by decision.** None are in the repo, and whether the live item carries any from an earlier submission can only be read in the dashboard. Costs installs, blocks no release. Capture at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser now, so they are scriptable rather than manual |
+| R-39 | Store screenshots | 3 | S | **Now scoped, 2026-09-08.** The live listing has three, all 1280x800, all showing the 1.3.0 interface with only two scope buttons. None are in the repo. Costs installs, blocks no release. Capture five fresh at **1280x800**, the one size Chrome and Edge both accept; the extension can be driven in a real browser, so they are scriptable |
 
 Table name: **roadmap-paused**
 
@@ -161,7 +161,7 @@ Table name: **roadmap-standing**
 
 | Signal | Value |
 |---|---|
-| Version | 1.4.4 (manifest and `package.json` aligned), packaged and **submitted to the Chrome Web Store on 2026-09-07, in review**. The store serves 1.3.0 until review completes |
+| Version | 1.4.4, **published on the Chrome Web Store 2026-09-08** and tagged `v1.4.4`. The served CRX was diffed against `dist/` and matches |
 | Store ID | `egedbdckafdbomehjaihjhbcgmngmlah` |
 | Users | 1,000 (listing, read 2026-09-07) |
 | Rating | 4.5 from 8 ratings |
@@ -780,18 +780,31 @@ left filling their canvases: the padding guidance is for the 128 used by the sto
 `chrome://extensions`, while those two are the toolbar and management icons, which should not
 shrink.
 
-### R-39 · No store screenshots exist in the repo · **S** · **paused** · *deferred 2026-09-07 (ADR-018)*
-**None are in the repo**, which is the part that is certain. Whether the live item already carries
-screenshots from an earlier submission could not be read remotely: the public listing page is a
-JavaScript application and its markup does not distinguish a real screenshot from a placeholder,
-so the dashboard is the only place to check. Since Chrome requires at least one to publish, the
-item probably has one from an earlier version showing an older UI.
+### R-39 · The listing's screenshots show a version we no longer ship · **S** · **paused** · *rescoped 2026-09-08*
+This was previously written as an unknown: whether the live item carried any screenshots was
+thought to be readable only in the dashboard. That was wrong. The public listing page labels each
+one in `alt` text (`Item media N (screenshot)`), so it can be read remotely, and it was on
+2026-09-08. **The item has three, all 1280x800**, and none of them are in this repo.
 
-Either way this blocks no release, and it costs installs. Deferred by decision. The requirement is
-at least one at 1280x800 or 640x400, up to five. These have to be real captures of the popup and
-the settings page, so they cannot be generated from the design masters. Good candidates: the
+What they show, and why they are now misleading rather than merely old:
+
+- All three picture the **two-button scope selector** of 1.3.0. The product has had four scopes
+  since 1.4.0 (domain, exact URL, prefix, regex) in a different layout (R-41).
+- The settings-page capture is captioned "based on a set of regex rules" while the interface
+  behind the caption has no regex option. The screenshot **undersells** what now ships.
+- The section rows show the emoji glyphs that 1.4.4 replaced with drawn icons, so the interface in
+  the pictures no longer matches the one a new user opens.
+- Each capture includes a full browser tab strip of real tabs, with readable page titles, and the
+  rules list shows real addresses with only partial blurring. Nothing secret, but it is the
+  author's own browsing on a public page, which is a reason to reshoot rather than retouch.
+
+The requirement is at least one at 1280x800 or 640x400, up to five, so there are two unused slots.
+Capture in a **clean browser profile** with tabs chosen for the shot. Good candidates: the
 four-way scope selector with a prefix pattern and its live tab match, the emoji picker, the badge
-editor, and the rules list.
+editor, the rules list, and the save confirmation banner from R-61, which is the newest visible
+thing the product does. These have to be real captures, so they cannot be generated from the
+design masters, but the extension can be driven over the DevTools protocol, so they are scriptable
+rather than hand-taken.
 
 ### R-40 · Dependabot · **S** · ✅ done 2026-09-06
 The audit gate added by R-16 is local and only runs on push, so a new advisory was invisible until

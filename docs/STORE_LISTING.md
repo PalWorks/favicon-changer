@@ -9,32 +9,38 @@ listing's current values were read off the public listing page on the same day.
 
 Submission steps live in [PUBLISHING.md](PUBLISHING.md) §1; this file is only the content.
 
-> **Status, 2026-09-07: 1.4.4 has been submitted to the Chrome Web Store and is in review.** The
-> data usage disclosures were submitted with **Web history left unchecked**, the recorded decision
-> in §2. Nothing in this file needs editing for that submission; it stands as the record of what
-> was sent, and as the source for the next one.
+> **Status, 2026-09-08: 1.4.4 is published and live.** It passed review with the data usage
+> disclosures submitted as recorded in §2, **Web history left unchecked**, so that answer is now a
+> precedent as well as a decision. This file stands as the record of what was sent and as the
+> source for the next submission.
 
 ---
 
 ## 0. What the live listing says today
 
-| Field | Live value, read 2026-09-07 |
+| Field | Live value, read 2026-09-08 |
 |---|---|
 | Name | Favicon Changer Ultimate |
 | Summary | Customize any site's favicon with emojis, image uploads, or badges & overlays. Per-site rules, local processing, no tracking. |
 | Category | Developer Tools |
-| Version | 1.3.0, last updated 10 June 2026 |
+| Version | **1.4.4**, last updated **8 September 2026** |
+| Package size the store reports | 165KiB |
 | Users / rating | 1,000 users, 4.5 from 8 ratings |
+| Screenshots | **3, all 1280x800**, and they show the 1.3.0 interface. See ROADMAP R-39 |
 | Language | English (United States) |
 | Privacy policy | `https://github.com/PalWorks/favicon-changer/blob/main/PRIVACY_POLICY.md` |
 | Developer | Palaniappan Meyyappan (palworks.ai), trader status declared |
 
 Table name: **listing-current**
 
+Read off the public listing page over the DevTools protocol, not from memory. The rating and the
+screenshot count come from the page's own `aria-label` and `alt` text rather than from its layout,
+because the carousel repeats each image and counting `<img>` elements gives seven for three
+screenshots.
+
 **So the store is five versions behind the code:** 1.4.0, 1.4.1, 1.4.2, 1.4.3 and 1.4.4 are all
-unpublished at the time this was written. The 1.4.4 package carries every one of those changes,
-and was submitted for review on 2026-09-07. Until review completes, the values in
-**listing-current** above are still what a visitor sees.
+unpublished at the time this file was written. **1.4.4 shipped all five on 2026-09-08**, so the
+store and the code are level again for the first time since June.
 
 ---
 
@@ -171,9 +177,9 @@ leave it empty and the store falls back to the developer contact address.
 
 ## 2. Privacy tab
 
-Nothing the extension handles changed in 1.4.4, so **if the item's privacy answers are already on
-file from 1.3.0, they do not need editing for this upload.** The text below is what they should
-say, so you can check them against it rather than retyping them.
+Nothing the extension handles changed in 1.4.4, so the answers already on file from 1.3.0 were
+left untouched and **1.4.4 passed review with them**. The text below is what they should say, so
+the next submission can be checked against it rather than retyped.
 
 ### Single purpose description
 

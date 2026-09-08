@@ -35,10 +35,9 @@ reject a re-upload of a version it already has, so bump before resubmitting.
 
 **The only channel in use.** Listing: `egedbdckafdbomehjaihjhbcgmngmlah`.
 
-> **1.4.4 was submitted for review on 2026-09-07 and is in review.** The privacy answers on file
-> were left as they were, with **Web history unchecked**; the reasoning and the fallback if a
-> reviewer disagrees are recorded in [STORE_LISTING.md](STORE_LISTING.md) §2. Review has
-> historically taken a few days. The store still serves 1.3.0 until it completes.
+> **1.4.4 is live: submitted 2026-09-07, published 2026-09-08.** Review took about a day. The
+> privacy answers were left as they were, with **Web history unchecked**, which is now a precedent
+> as well as a decision ([STORE_LISTING.md](STORE_LISTING.md) §2).
 
 1. `npm run check && npm run build`, then zip `dist/` as in §0.
 2. Upload the zip in the developer dashboard against the existing item.
@@ -52,14 +51,29 @@ reject a re-upload of a version it already has, so bump before resubmitting.
    message; that is what makes the tag a receipt rather than a label.
 7. When review completes, update the **listing-current** table in
    [STORE_LISTING.md](STORE_LISTING.md) §0 and the **product-snapshot** version row in
-   [../ROADMAP.md](../ROADMAP.md).
+   [../ROADMAP.md](../ROADMAP.md). Read the values off the listing page rather than assuming them.
+8. Verify what users are actually being served, which is not the same claim as "the zip we
+   uploaded was correct":
+
+   ```bash
+   curl -sL -o pub.crx "https://clients2.google.com/service/update2/crx?response=redirect\
+   &prodversion=152&acceptformat=crx3&x=id%3Degedbdckafdbomehjaihjhbcgmngmlah%26uc"
+   # A CRX3 is a 12-byte header, a header of `hlen` bytes, then a plain zip.
+   python3 -c "import struct;d=open('pub.crx','rb').read();open('pub.zip','wb').write(d[12+struct.unpack('<I',d[8:12])[0]:])"
+   unzip -q pub.zip -d from_crx && rm -rf from_crx/_metadata
+   diff -r from_crx dist
+   ```
+
+   Done for 1.4.4 on 2026-09-08: identical to `dist/` except the `update_url` line Google injects
+   into `manifest.json` at publish time. That is the only difference to expect.
 
 > `v1.4.4` was tagged at submission on 2026-09-07; `git show v1.4.4` names the commit and carries
 > the package's sha256 in the tag message. The code in that tree is identical to the packaged
 > commit `b26a8b9`; every commit since touches documentation only,
 > which was verified with `git diff b26a8b9 HEAD -- . ':(exclude)*.md'` before tagging.
 
-Screenshots (R-39) are still outstanding and would improve the listing, but they block nothing.
+The listing carries three screenshots, read off the public page on 2026-09-08, and all three show
+the 1.3.0 interface. Refreshing them is R-39; it blocks nothing.
 Every field's copy, measured against the store's limits, is in [STORE_LISTING.md](STORE_LISTING.md).
 
 ---

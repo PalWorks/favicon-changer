@@ -14,7 +14,7 @@ number is `public/manifest.json`; `package.json` is kept equal to it.
 
 ## [1.4.4]: 2026-09-07
 
-*Submitted to the Chrome Web Store for review on 2026-09-07.*
+*Submitted to the Chrome Web Store 2026-09-07, published 2026-09-08.*
 
 ### Fixed
 - **A rule could go missing.** Saving two rules at almost the same moment, by clicking twice
